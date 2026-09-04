@@ -532,3 +532,101 @@ a {
   align-items: center;
   gap: 0.4rem;
 }
+
+/* Responsive Display Utilities */
+.desktop-only {
+  display: inline-flex !important;
+}
+.mobile-only {
+  display: none !important;
+}
+
+@media (max-width: 640px) {
+  .desktop-only {
+    display: none !important;
+  }
+  .mobile-only {
+    display: inline-flex !important;
+  }
+}
+
+/* Home Hero Banner - Sleek, Compact & Proportional */
+.home-hero-banner {
+  text-align: center;
+  padding: 1.85rem 1.75rem;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, rgba(184, 134, 155, 0.14) 0%, rgba(246, 196, 146, 0.18) 100%);
+  border: 1.5px solid rgba(184, 134, 155, 0.3);
+  box-shadow: 0 8px 30px rgba(70, 45, 80, 0.07);
+  margin-bottom: 1.75rem;
+}
+
+.home-hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: var(--radius-full);
+  background: rgba(184, 134, 155, 0.15);
+  border: 1px solid rgba(184, 134, 155, 0.35);
+  color: #8e4868;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 0.5rem;
+}
+
+.home-hero-title {
+  font-size: clamp(1.3rem, 4vw, 2.1rem);
+  font-weight: 800;
+  margin-bottom: 0.35rem;
+  color: var(--text-primary);
+  line-height: 1.25;
+}
+
+.home-hero-subtitle {
+  font-size: clamp(0.85rem, 2.5vw, 1rem);
+  color: var(--text-secondary);
+  max-width: 540px;
+  margin: 0 auto 1.1rem auto;
+  line-height: 1.45;
+}
+
+.home-hero-actions {
+  display: flex;
+  justify-content: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 640px) {
+  .home-hero-banner {
+    padding: 1.1rem 0.9rem;
+    margin-bottom: 1.2rem;
+    border-radius: var(--radius-md);
+  }
+  .home-hero-badge {
+    padding: 0.2rem 0.55rem;
+    font-size: 0.68rem;
+    margin-bottom: 0.35rem;
+  }
+  .home-hero-title {
+    font-size: 1.35rem;
+    margin-bottom: 0.25rem;
+  }
+  .home-hero-subtitle {
+    font-size: 0.84rem;
+    margin-bottom: 0.85rem;
+    line-height: 1.35;
+  }
+  .home-hero-actions {
+    gap: 0.5rem;
+  }
+  .home-hero-actions .btn {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.82rem;
+    min-height: 38px;
+    flex: 1 1 45%;
+  }
+}

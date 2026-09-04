@@ -15,11 +15,12 @@ import {
   Upload,
   Save,
   CheckCircle2,
-  Sparkles
+  Sparkles,
+  LogOut
 } from 'lucide-react';
 
 export default function Profile({ currentLang, onToggleLang, addToast }) {
-  const { user, token, setUser } = useAuth();
+  const { user, token, setUser, logout } = useAuth();
   const { t, language } = useLanguage();
   const fileInputRef = useRef(null);
 
@@ -401,6 +402,37 @@ export default function Profile({ currentLang, onToggleLang, addToast }) {
             </Button>
           </div>
 
+          {/* Dedicated Logout Option for Mobile & Desktop */}
+          <div style={{ marginTop: '1.75rem', paddingTop: '1.25rem', borderTop: '1px solid var(--border-color)' }}>
+            <button
+              type="button"
+              onClick={() => {
+                if (window.confirm(language === 'HI' ? 'क्या आप सचमुच अपने खाते से लॉगआउट करना चाहते हैं?' : 'Are you sure you want to log out of your account?')) {
+                  logout();
+                  if (addToast) addToast(language === 'HI' ? 'सफलतापूर्वक लॉगआउट किया गया' : 'Logged out successfully', 'info');
+                }
+              }}
+              style={{
+                width: '100%',
+                padding: '0.8rem',
+                borderRadius: 'var(--radius-sm)',
+                background: 'rgba(239, 68, 68, 0.08)',
+                border: '1.5px solid rgba(239, 68, 68, 0.3)',
+                color: 'var(--danger)',
+                fontWeight: 700,
+                fontSize: '0.92rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.5rem',
+                cursor: 'pointer',
+                transition: 'var(--transition-smooth)'
+              }}
+            >
+              <LogOut size={18} />
+              <span>{language === 'HI' ? 'कारीगर खाते से लॉगआउट करें' : 'Log Out of Artisan Account'}</span>
+            </button>
+          </div>
         </form>
       </div>
 

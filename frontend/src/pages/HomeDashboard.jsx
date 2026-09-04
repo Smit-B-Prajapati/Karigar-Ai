@@ -157,53 +157,31 @@ export default function HomeDashboard({ addToast }) {
   return (
     <div className="main-container" style={{ maxWidth: '1120px' }}>
       
-      {/* Hero Welcome Banner */}
-      <div style={{
-        textAlign: 'center',
-        padding: '3rem 1.5rem',
-        borderRadius: 'var(--radius-lg)',
-        background: 'linear-gradient(135deg, rgba(184, 134, 155, 0.14) 0%, rgba(246, 196, 146, 0.18) 100%)',
-        border: '1.5px solid rgba(184, 134, 155, 0.3)',
-        boxShadow: '0 8px 30px rgba(70, 45, 80, 0.07)',
-        marginBottom: '2rem'
-      }}>
-        <div style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '0.4rem',
-          padding: '0.35rem 0.9rem',
-          borderRadius: 'var(--radius-full)',
-          background: 'rgba(184, 134, 155, 0.15)',
-          border: '1px solid rgba(184, 134, 155, 0.35)',
-          color: '#8e4868',
-          fontSize: '0.8rem',
-          fontWeight: 800,
-          textTransform: 'uppercase',
-          letterSpacing: '0.06em',
-          marginBottom: '1rem'
-        }}>
-          <Sparkles size={14} color="var(--accent-gold)" />
+      {/* Hero Welcome Banner - Compact, Sleek & Mobile Friendly */}
+      <div className="home-hero-banner">
+        <div className="home-hero-badge">
+          <Sparkles size={13} color="var(--accent-gold)" />
           <span>{t('home.platformBadge', 'AI PLATFORM FOR ARTISANS')}</span>
         </div>
 
-        <h1 style={{ fontSize: '2.4rem', fontWeight: 900, marginBottom: '0.6rem', color: 'var(--text-primary)' }}>
+        <h1 className="home-hero-title">
           {t('home.welcome', 'Welcome back')}, <span className="gradient-text">{user?.name || 'Karigar'}</span>! 🙏
         </h1>
-        <p style={{ fontSize: '1.05rem', color: 'var(--text-secondary)', maxWidth: '640px', margin: '0 auto 1.75rem auto', lineHeight: '1.6' }}>
+        <p className="home-hero-subtitle">
           {t('home.welcomeSubtitle', 'Turn your handmade products into market-ready listings with AI.')}
         </p>
 
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+        <div className="home-hero-actions">
           <Button 
             onClick={() => navigate('/add-product')}
-            icon={<Plus size={18} />}
+            icon={<Plus size={16} />}
             variant="primary"
           >
             {t('home.addNewCraft', 'Add New Product')}
           </Button>
           <Button 
             onClick={() => navigate('/ai-market-studio')}
-            icon={<Sparkles size={18} color="var(--accent-gold)" />}
+            icon={<Sparkles size={16} color="var(--accent-gold)" />}
             variant="secondary"
           >
             {t('home.openAiStudio', 'Open AI Market Studio')}
