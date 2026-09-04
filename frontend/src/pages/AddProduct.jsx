@@ -503,8 +503,6 @@ export default function AddProduct({ addToast }) {
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 badgeText={voiceFilled && formData.description ? (language === 'HI' ? '✨ वॉइस द्वारा भरा गया' : '✨ Voice Filled') : null}
-                voicePrompt={true}
-                onVoiceClick={() => setIsVoiceModalOpen(true)}
               />
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
