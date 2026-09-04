@@ -56,7 +56,6 @@ export default function VoiceRecorderModal({
   const timerRef = useRef(null);
   const transcriptRef = useRef(initialText || '');
   const isRecordingRef = useRef(false);
-  const audioFileInputRef = useRef(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -94,7 +93,7 @@ export default function VoiceRecorderModal({
     }
   };
 
-  // Start Live Browser Recording
+  // Start In-App Audio Recording
   const handleStartRecording = async () => {
     setErrorMessage('');
     setLiveNotice('');
@@ -105,19 +104,6 @@ export default function VoiceRecorderModal({
     audioChunksRef.current = [];
     isRecordingRef.current = true;
 
-    const isLocalNetworkHttp = typeof window !== 'undefined' &&
-      window.location.protocol === 'http:' &&
-      window.location.hostname !== 'localhost' &&
-      window.location.hostname !== '127.0.0.1';
-
-    // In Chrome on mobile over local HTTP (192.168.x.x), in-browser SpeechRecognition is blocked by Chrome security policy.
-    // Automatically trigger the phone's native sound recorder which has 100% support over HTTP!
-    if (isLocalNetworkHttp && audioFileInputRef.current) {
-      console.log('[VoiceRecorder] HTTP local network detected, opening native phone audio capture');
-      audioFileInputRef.current.click();
-      return;
-    }
-
     const hasWebSpeech = isSpeechRecognitionSupported();
     const hasMediaDevices = typeof navigator !== 'undefined' && 
       Boolean(navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function');
@@ -125,14 +111,39 @@ export default function VoiceRecorderModal({
     let stream = null;
     let startedSpeech = false;
 
-    // 1. Start Web Speech API Recognition if supported
+    // 1. In-App Audio Recorder (Captures microphone stream directly in browser)
+    if (hasMediaDevices) {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const mediaRecorder = new MediaRecorder(stream);
+        mediaRecorderRef.current = mediaRecorder;
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data && e.data.size > 0) {
+            audioChunksRef.current.push(e.data);
+          }
+        };
+        mediaRecorder.start(250);
+      } catch (recErr) {
+        console.warn('In-app mediaRecorder init note:', recErr);
+        if (recErr.name === 'NotAllowedError' || recErr.name === 'PermissionDeniedError') {
+          handleRecordingError(
+            language === 'HI'
+              ? 'माइक्रोफ़ोन अनुमति अस्वीकृत। कृपया ब्राउज़र में माइक की अनुमति दें।'
+              : 'Microphone permission was denied in your browser settings. Please allow microphone access to record.'
+          );
+          return;
+        }
+      }
+    }
+
+    // 2. In-App Web Speech API Recognition for real-time transcription
     if (hasWebSpeech) {
       try {
         let accumulatedText = '';
         const recognizer = createSpeechRecognizer(selectedLanguage, {
           shouldContinue: () => isRecordingRef.current,
           onStart: () => {
-            console.log('[SpeechRecognition] Listening in', selectedLanguage);
+            console.log('[SpeechRecognition] In-app listening in', selectedLanguage);
           },
           onResult: ({ finalTranscript, interimTranscript }) => {
             const current = (accumulatedText + ' ' + finalTranscript + ' ' + interimTranscript).trim();
@@ -146,30 +157,23 @@ export default function VoiceRecorderModal({
           onError: (event) => {
             console.warn('[SpeechRecognition Event Error]:', event.error);
             if (event.error === 'not-allowed') {
-              if (isLocalNetworkHttp && audioFileInputRef.current) {
-                // Instantly launch phone recorder rather than stranding user
-                audioFileInputRef.current.click();
-                return;
+              if (!stream) {
+                handleRecordingError(
+                  language === 'HI'
+                    ? 'माइक्रोफ़ोन अनुमति अस्वीकृत। कृपया ब्राउज़र में माइक की अनुमति दें।'
+                    : 'Microphone permission was denied. Please allow microphone access in your browser settings.'
+                );
               }
-              handleRecordingError(
-                isLocalNetworkHttp
-                  ? (language === 'HI'
-                      ? 'Chrome लोकल वाई-फाई (HTTP) पर लाइव माइक ब्लॉक करता है। कृपया नीचे "फ़ोन माइक से रिकॉर्ड करें" टैप करें।'
-                      : 'Chrome blocks live in-browser mic over local Wi-Fi HTTP. Please tap "Record with Phone Microphone" below.')
-                  : (language === 'HI'
-                      ? 'माइक्रोफ़ोन अनुमति अस्वीकृत। कृपया ब्राउज़र सेटिंग्स में माइक की अनुमति दें।'
-                      : 'Microphone permission was denied. Please allow microphone access in your browser settings.')
-              );
             } else if (event.error === 'audio-capture' || event.error === 'network' || event.error === 'service-not-allowed') {
               setLiveNotice(
                 language === 'HI'
-                  ? 'स्थानीय नेटवर्क (HTTP) पर लाइव स्पीच सीमित है। नीचे "फ़ोन ऐप से रिकॉर्ड करें" टैप करें या बॉक्स पर टैप करके कीबोर्ड के 🎙️ माइक से बोलें।'
-                  : 'Browser live voice recognition restricted over local Wi-Fi HTTP. Tap "Record with Phone App" below or tap the box to use your keyboard microphone 🎙️.'
+                  ? 'लाइव ट्रांसक्रिप्शन धीमा है। रिकॉर्डिंग जारी है, समाप्त होने पर ऑडियो संसाधित होगा।'
+                  : 'Live preview slow. Audio is recording in-app and will be processed when you tap Stop.'
               );
             }
           },
           onEnd: () => {
-            console.log('[SpeechRecognition] Ended check');
+            console.log('[SpeechRecognition] In-app ended check');
           }
         });
 
@@ -183,30 +187,14 @@ export default function VoiceRecorderModal({
       }
     }
 
-    // 2. MediaRecorder for Audio Chunks (Only if mediaDevices is supported)
-    if (hasMediaDevices) {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const mediaRecorder = new MediaRecorder(stream);
-        mediaRecorderRef.current = mediaRecorder;
-        mediaRecorder.ondataavailable = (e) => {
-          if (e.data.size > 0) {
-            audioChunksRef.current.push(e.data);
-          }
-        };
-        mediaRecorder.start();
-      } catch (recErr) {
-        console.warn('MediaRecorder init note:', recErr);
-      }
-    }
-
-    // 3. Fallback notice if neither speech engine nor audio stream could start
+    // 3. If neither stream nor speech engine could start
     if (!startedSpeech && !stream) {
-      setLiveNotice(
+      handleRecordingError(
         language === 'HI'
-          ? 'लाइव माइक शुरू नहीं हो सका। कृपया "फ़ोन ऐप से रिकॉर्ड करें", नमूना भरें या विवरण टाइप करें।'
-          : 'Microphone stream could not start. Please tap "Record with Phone App", use sample prompt, or type details.'
+          ? 'माइक्रोफ़ोन चालू नहीं हो सका। कृपया ब्राउज़र में माइक की अनुमति दें या नमूना विवरण चुनें।'
+          : 'Could not access in-app microphone. Please allow microphone access in your browser or load sample craft description.'
       );
+      return;
     }
 
     timerRef.current = setInterval(() => {
@@ -214,38 +202,6 @@ export default function VoiceRecorderModal({
     }, 1000);
 
     setUiState('recording');
-  };
-
-  // Native Audio File from Phone Microphone / Upload
-  const handleNativeAudioFileSelected = async (e) => {
-    const file = e.target.files && e.target.files[0];
-    if (!file) return;
-
-    stopAllRecording();
-    setUiState('processing');
-    setLiveNotice('');
-
-    try {
-      const res = await sendAudioToBackendSTT(file, selectedLanguage, token);
-      let extractedText = '';
-      if (res && res.success && res.transcript) {
-        extractedText = res.transcript;
-      } else {
-        extractedText = SAMPLE_FALLBACKS[selectedLanguage] || SAMPLE_FALLBACKS['hi-IN'];
-      }
-      setTranscript(extractedText);
-      transcriptRef.current = extractedText;
-      await processFinalTranscript(extractedText);
-      if (addToast) addToast('Voice recorded & processed successfully!', 'success');
-    } catch (err) {
-      console.error('Audio file upload error:', err);
-      const sampleText = SAMPLE_FALLBACKS[selectedLanguage] || SAMPLE_FALLBACKS['hi-IN'];
-      setTranscript(sampleText);
-      transcriptRef.current = sampleText;
-      await processFinalTranscript(sampleText);
-    } finally {
-      if (e.target) e.target.value = '';
-    }
   };
 
   const useFallbackSample = async () => {
@@ -511,34 +467,14 @@ export default function VoiceRecorderModal({
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.6rem' }}>
                 <button
                   type="button"
-                  onClick={() => audioFileInputRef.current?.click()}
-                  style={{
-                    padding: '0.55rem 1.1rem',
-                    borderRadius: 'var(--radius-sm)',
-                    background: 'rgba(59, 130, 246, 0.12)',
-                    border: '1px solid rgba(59, 130, 246, 0.4)',
-                    color: '#60a5fa',
-                    fontSize: '0.84rem',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '0.4rem'
-                  }}
-                >
-                  <span>📱 Record with Phone App / Upload Voice</span>
-                </button>
-
-                <button
-                  type="button"
                   onClick={useFallbackSample}
                   style={{
                     background: 'rgba(255, 183, 3, 0.12)',
                     border: '1px dashed var(--accent-gold)',
                     color: 'var(--accent-gold)',
                     borderRadius: 'var(--radius-sm)',
-                    padding: '0.4rem 0.85rem',
-                    fontSize: '0.8rem',
+                    padding: '0.45rem 0.95rem',
+                    fontSize: '0.82rem',
                     cursor: 'pointer',
                     fontWeight: 600
                   }}
@@ -588,7 +524,7 @@ export default function VoiceRecorderModal({
                 <span>🔴 Recording ({recordingSeconds}s)</span>
               </div>
               <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '0.75rem' }}>
-                Listening... Speak naturally or tap below to use keyboard mic 🎙️. Tap red button when finished.
+                Listening in app... Speak naturally. Tap red button when finished.
               </p>
 
               {/* Live Editable Text Input / Preview */}
@@ -598,7 +534,7 @@ export default function VoiceRecorderModal({
                   setTranscript(e.target.value);
                   transcriptRef.current = e.target.value;
                 }}
-                placeholder="Listening for your voice... speak now, or tap here to use your keyboard's 🎙️ voice typing or edit text"
+                placeholder="Listening for your voice... speak now, or tap here to edit text"
                 rows={3}
                 style={{
                   width: '100%',
@@ -632,26 +568,6 @@ export default function VoiceRecorderModal({
 
               {/* Quick Actions during Recording */}
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', justifyContent: 'center', marginTop: '0.85rem' }}>
-                <button
-                  type="button"
-                  onClick={() => audioFileInputRef.current?.click()}
-                  style={{
-                    padding: '0.4rem 0.8rem',
-                    borderRadius: 'var(--radius-sm)',
-                    background: 'rgba(59, 130, 246, 0.15)',
-                    border: '1px solid rgba(59, 130, 246, 0.4)',
-                    color: '#60a5fa',
-                    fontSize: '0.78rem',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '0.35rem'
-                  }}
-                >
-                  📱 Record with Phone Voice App
-                </button>
-
                 <button
                   type="button"
                   onClick={useFallbackSample}
@@ -827,40 +743,41 @@ export default function VoiceRecorderModal({
               </div>
 
               <div style={{ color: '#f87171', fontWeight: 700, fontSize: '0.98rem', marginBottom: '0.35rem' }}>
-                ⚠ Local Network (HTTP) Browser Restriction
+                ⚠ In-App Microphone Notice
               </div>
               <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', maxWidth: '440px', margin: '0 auto 1rem auto', lineHeight: '1.4' }}>
-                {errorMessage || 'Google Chrome blocks live in-browser mic streaming over plain Wi-Fi HTTP (192.168.x.x), even with phone permissions allowed. On Vercel (HTTPS), this works automatically.'}
+                {errorMessage || 'Browser microphone access was restricted. Please check your browser microphone permissions or tap below to test with the sample prompt.'}
               </p>
 
-              {/* High-visibility Action Buttons */}
+              {/* Action Buttons */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', alignItems: 'center', marginBottom: '1.1rem' }}>
-                <button
-                  type="button"
-                  onClick={() => audioFileInputRef.current?.click()}
-                  style={{
-                    width: '100%',
-                    maxWidth: '340px',
-                    padding: '0.65rem 1rem',
-                    background: 'linear-gradient(135deg, #2563eb, #3b82f6)',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: 'var(--radius-sm)',
-                    fontSize: '0.88rem',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.45rem',
-                    boxShadow: '0 4px 14px rgba(37, 99, 235, 0.35)'
-                  }}
-                >
-                  <Mic size={18} />
-                  <span>📱 Record with Phone Microphone</span>
-                </button>
-
                 <div style={{ display: 'flex', gap: '0.5rem', width: '100%', maxWidth: '340px' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setErrorMessage('');
+                      handleStartRecording();
+                    }}
+                    style={{
+                      flex: 1,
+                      background: 'var(--accent-terracotta)',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '0.55rem 0.75rem',
+                      fontSize: '0.84rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.35rem'
+                    }}
+                  >
+                    <RefreshCw size={14} />
+                    <span>Try Recording Again</span>
+                  </button>
+
                   <button
                     type="button"
                     onClick={useFallbackSample}
@@ -870,48 +787,27 @@ export default function VoiceRecorderModal({
                       border: '1px dashed var(--accent-gold)',
                       color: 'var(--accent-gold)',
                       borderRadius: 'var(--radius-sm)',
-                      padding: '0.5rem 0.6rem',
-                      fontSize: '0.78rem',
+                      padding: '0.55rem 0.75rem',
+                      fontSize: '0.82rem',
                       fontWeight: 600,
                       cursor: 'pointer'
                     }}
                   >
                     ⚡ Load Sample Craft
                   </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setErrorMessage('');
-                      setUiState('ready');
-                    }}
-                    style={{
-                      flex: 1,
-                      background: 'var(--bg-input)',
-                      border: '1px solid var(--border-color)',
-                      color: 'var(--text-secondary)',
-                      borderRadius: 'var(--radius-sm)',
-                      padding: '0.5rem 0.6rem',
-                      fontSize: '0.78rem',
-                      fontWeight: 600,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    🔄 Try Again
-                  </button>
                 </div>
               </div>
 
-              {/* Keyboard microphone input alternative */}
+              {/* Textarea alternative */}
               <div style={{ textAlign: 'left', marginBottom: '0.35rem' }}>
                 <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                  Or tap below to speak using your phone keyboard's 🎙️ microphone:
+                  Or describe your craft manually:
                 </span>
               </div>
               <textarea
                 value={transcript}
                 onChange={(e) => handleTranscriptChange(e.target.value)}
-                placeholder="Tap here and use your keyboard's 🎙️ microphone icon to speak, or type craft description..."
+                placeholder="Type craft description manually here..."
                 rows={3}
                 style={{
                   width: '100%',
@@ -962,16 +858,6 @@ export default function VoiceRecorderModal({
             </Button>
           )}
         </div>
-
-        {/* Hidden Native Mobile Microphone / Audio File Input */}
-        <input
-          ref={audioFileInputRef}
-          type="file"
-          accept="audio/*"
-          capture="microphone"
-          style={{ display: 'none' }}
-          onChange={handleNativeAudioFileSelected}
-        />
       </div>
     </div>
   );
