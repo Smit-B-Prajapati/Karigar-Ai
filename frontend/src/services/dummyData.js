@@ -13,7 +13,7 @@ export const mockArtisanProfile = {
   phone: "+91 98765 43210",
   upiId: "ramesh.prajapati@upi",
   bio: "Master craftsman preserving 3 generations of traditional hand-molded clay pottery, natural mineral glazing, and sustainable terracotta decor.",
-  avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=250&q=80"
+  avatar: ""
 };
 
 // Required Demo Fallback Items

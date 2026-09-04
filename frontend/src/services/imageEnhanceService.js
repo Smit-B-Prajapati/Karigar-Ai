@@ -22,9 +22,124 @@ export function resolveImageUrl(urlOrPath) {
 }
 
 /**
- * Client-Side Studio Compositor: Produces a high-key studio photograph with
- * crisp aspect ratio, studio lighting, contrast boost, and soft diffuse contact shadow.
- * Guarantees 100% success rate on mobile, Vercel, and offline environments.
+ * Intelligent Client-Side Background Segmentation using Perimeter Flood-Fill.
+ * Erases surface backgrounds (bed sheets, tables, floors) and generates transparent PNG.
+ */
+function isolateForegroundWithCanvas(img, targetWidth, targetHeight) {
+  try {
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = targetWidth;
+    tempCanvas.height = targetHeight;
+    const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
+    if (!tempCtx) return img;
+
+    tempCtx.drawImage(img, 0, 0, targetWidth, targetHeight);
+    const imgData = tempCtx.getImageData(0, 0, targetWidth, targetHeight);
+    const data = imgData.data;
+
+    // Check if image already has transparent pixels (e.g. from Remove.bg)
+    let hasAlpha = false;
+    for (let i = 3; i < data.length; i += 60) {
+      if (data[i] < 180) {
+        hasAlpha = true;
+        break;
+      }
+    }
+
+    if (hasAlpha) {
+      return tempCanvas;
+    }
+
+    // Sample border pixels to detect dominant background color
+    const borderColors = [];
+    const sampleStep = Math.max(4, Math.floor(targetWidth / 40));
+    for (let x = 0; x < targetWidth; x += sampleStep) {
+      const topIdx = x * 4;
+      borderColors.push([data[topIdx], data[topIdx + 1], data[topIdx + 2]]);
+      const botIdx = ((targetHeight - 1) * targetWidth + x) * 4;
+      borderColors.push([data[botIdx], data[botIdx + 1], data[botIdx + 2]]);
+    }
+    for (let y = 0; y < targetHeight; y += sampleStep) {
+      const leftIdx = y * targetWidth * 4;
+      borderColors.push([data[leftIdx], data[leftIdx + 1], data[leftIdx + 2]]);
+      const rightIdx = (y * targetWidth + (targetWidth - 1)) * 4;
+      borderColors.push([data[rightIdx], data[rightIdx + 1], data[rightIdx + 2]]);
+    }
+
+    let sumR = 0, sumG = 0, sumB = 0;
+    for (const c of borderColors) {
+      sumR += c[0];
+      sumG += c[1];
+      sumB += c[2];
+    }
+    const avgR = sumR / borderColors.length;
+    const avgG = sumG / borderColors.length;
+    const avgB = sumB / borderColors.length;
+
+    // BFS Flood-fill from borders inward to clear matching background
+    const visited = new Uint8Array(targetWidth * targetHeight);
+    const queue = [];
+
+    for (let x = 0; x < targetWidth; x++) {
+      queue.push(x, 0);
+      queue.push(x, targetHeight - 1);
+      visited[x] = 1;
+      visited[(targetHeight - 1) * targetWidth + x] = 1;
+    }
+    for (let y = 0; y < targetHeight; y++) {
+      queue.push(0, y);
+      queue.push(targetWidth - 1, y);
+      visited[y * targetWidth] = 1;
+      visited[y * targetWidth + targetWidth - 1] = 1;
+    }
+
+    const threshold = 62;
+    let head = 0;
+
+    while (head < queue.length) {
+      const qx = queue[head++];
+      const qy = queue[head++];
+      const pIdx = (qy * targetWidth + qx) * 4;
+
+      const r = data[pIdx];
+      const g = data[pIdx + 1];
+      const b = data[pIdx + 2];
+
+      const dist = Math.sqrt((r - avgR) ** 2 + (g - avgG) ** 2 + (b - avgB) ** 2);
+
+      if (dist < threshold) {
+        data[pIdx + 3] = 0; // Transparent cutout
+
+        if (qx + 1 < targetWidth && !visited[qy * targetWidth + qx + 1]) {
+          visited[qy * targetWidth + qx + 1] = 1;
+          queue.push(qx + 1, qy);
+        }
+        if (qx - 1 >= 0 && !visited[qy * targetWidth + qx - 1]) {
+          visited[qy * targetWidth + qx - 1] = 1;
+          queue.push(qx - 1, qy);
+        }
+        if (qy + 1 < targetHeight && !visited[(qy + 1) * targetWidth + qx]) {
+          visited[(qy + 1) * targetWidth + qx] = 1;
+          queue.push(qx, qy + 1);
+        }
+        if (qy - 1 >= 0 && !visited[(qy - 1) * targetWidth + qx]) {
+          visited[(qy - 1) * targetWidth + qx] = 1;
+          queue.push(qx, qy - 1);
+        }
+      }
+    }
+
+    tempCtx.putImageData(imgData, 0, 0);
+    return tempCanvas;
+  } catch (e) {
+    console.warn('Canvas foreground isolation fallback:', e);
+    return img;
+  }
+}
+
+/**
+ * Client-Side Studio Compositor: Composites segmented craft onto a pristine
+ * high-key studio background with diffuse contact shadow and lighting enhancement.
  */
 export async function renderClientStudioCompositor(imageSrc, preset = 'Studio Clean White') {
   if (typeof window === 'undefined' || !imageSrc) {
@@ -70,15 +185,20 @@ export async function renderClientStudioCompositor(imageSrc, preset = 'Studio Cl
         ctx.fillStyle = bgGrad;
         ctx.fillRect(0, 0, size, size);
 
-        // 2. Aspect ratio calculation (fit inside 88% bounding box to allow breathing room)
+        // 2. Isolate foreground if not already transparent
+        const sourceElement = isolateForegroundWithCanvas(img, img.naturalWidth || 800, img.naturalHeight || 800);
+
+        // 3. Aspect ratio calculation (fit inside 88% bounding box to allow breathing room)
+        const srcW = img.naturalWidth || 800;
+        const srcH = img.naturalHeight || 800;
         const maxBound = size * 0.88;
-        const scale = Math.min(maxBound / img.naturalWidth, maxBound / img.naturalHeight);
-        const w = Math.round(img.naturalWidth * scale);
-        const h = Math.round(img.naturalHeight * scale);
+        const scale = Math.min(maxBound / srcW, maxBound / srcH);
+        const w = Math.round(srcW * scale);
+        const h = Math.round(srcH * scale);
         const x = Math.round((size - w) / 2);
         const y = Math.round((size - h) / 2);
 
-        // 3. Diffuse contact shadow under craft product
+        // 4. Diffuse contact shadow under craft product
         ctx.save();
         const shadowGrad = ctx.createRadialGradient(
           size * 0.5,
@@ -88,7 +208,7 @@ export async function renderClientStudioCompositor(imageSrc, preset = 'Studio Cl
           y + h - 10,
           w * 0.48
         );
-        shadowGrad.addColorStop(0, 'rgba(15, 23, 42, 0.22)');
+        shadowGrad.addColorStop(0, 'rgba(15, 23, 42, 0.24)');
         shadowGrad.addColorStop(0.4, 'rgba(15, 23, 42, 0.10)');
         shadowGrad.addColorStop(1, 'rgba(15, 23, 42, 0)');
         ctx.fillStyle = shadowGrad;
@@ -97,15 +217,15 @@ export async function renderClientStudioCompositor(imageSrc, preset = 'Studio Cl
         ctx.fill();
         ctx.restore();
 
-        // 4. Render product with studio lighting & vibrancy filter
+        // 5. Render product with studio lighting & vibrancy filter
         ctx.save();
         if (ctx.filter !== undefined) {
           ctx.filter = 'contrast(1.08) brightness(1.04) saturate(1.12)';
         }
-        ctx.drawImage(img, x, y, w, h);
+        ctx.drawImage(sourceElement, x, y, w, h);
         ctx.restore();
 
-        // 5. Subtle studio corner vignette to focus viewer's eyes onto craftwork
+        // 6. Subtle studio vignette
         ctx.save();
         const vignette = ctx.createRadialGradient(size * 0.5, size * 0.5, size * 0.45, size * 0.5, size * 0.5, size * 0.72);
         vignette.addColorStop(0, 'rgba(255, 255, 255, 0)');
@@ -129,17 +249,12 @@ export async function renderClientStudioCompositor(imageSrc, preset = 'Studio Cl
 }
 
 /**
- * Enhance product photo using backend POST /api/image/enhance API with
+ * Enhance product photo using backend/Vercel POST /api/image/enhance API with
  * seamless instant fallback to Client Studio Compositor.
- * @param {string|File|Blob} imageInput 
- * @param {string} token 
- * @param {object} [options] 
- * @returns {Promise<{ success: boolean, isConfigured?: boolean, originalImageUrl?: string, enhancedImageUrl?: string, enhancedBase64?: string, message?: string, engine?: string }>}
  */
 export async function enhanceRawImage(imageInput, token = null, options = {}) {
   let imagePayload = imageInput;
 
-  // Always optimize image client-side to ensure rapid transmission
   try {
     const optimized = await optimizeImageForUpload(imageInput, { maxDimension: 1200, quality: 0.85 });
     imagePayload = optimized.base64;
@@ -151,7 +266,7 @@ export async function enhanceRawImage(imageInput, token = null, options = {}) {
     }
   }
 
-  // 1. Try Backend API first if available (with 3s timeout)
+  // 1. Try Remove.bg AI Segmentation API (via Vercel Serverless Function / Backend)
   try {
     const headers = {};
     if (token) {
@@ -161,7 +276,7 @@ export async function enhanceRawImage(imageInput, token = null, options = {}) {
     const res = await apiRequest('/image/enhance', {
       method: 'POST',
       headers,
-      timeout: 3000,
+      timeout: 8000,
       body: JSON.stringify({
         image: imagePayload,
         productId: options.productId || 'temp',
@@ -169,32 +284,34 @@ export async function enhanceRawImage(imageInput, token = null, options = {}) {
       }),
     });
 
-    if (res && res.success && (res.enhancedImageUrl || res.enhancedBase64)) {
-      const fullEnhancedUrl = resolveImageUrl(res.enhancedImageUrl);
-      const fullOriginalUrl = resolveImageUrl(res.originalImageUrl) || imagePayload;
+    if (res && res.success && (res.enhancedImageUrl || res.enhancedBase64 || res.transparentImageUrl)) {
+      const transparentUrl = res.transparentImageUrl || res.enhancedBase64 || res.enhancedImageUrl;
+      // Composite the transparent craft cleanly onto studio infinity cove
+      const studioComposite = await renderClientStudioCompositor(transparentUrl, options.preset || 'Studio Clean White');
 
       return {
         success: true,
         isConfigured: true,
-        originalImageUrl: fullOriginalUrl,
-        enhancedImageUrl: fullEnhancedUrl,
-        enhancedBase64: res.enhancedBase64 || fullEnhancedUrl,
-        enhancedImage: res.enhancedBase64 || fullEnhancedUrl,
-        message: res.message || 'Image enhanced successfully',
-        engine: res.engine || 'removebg-sharp-compositing-engine',
-        enhancementDetails: res.enhancementDetails || {
-          background: 'Studio Clean White Backdrop',
+        originalImageUrl: imagePayload,
+        enhancedImageUrl: studioComposite,
+        enhancedBase64: studioComposite,
+        enhancedImage: studioComposite,
+        message: 'Background removed with AI & Studio Lighting applied',
+        engine: res.engine || 'removebg-ai-segmentation',
+        enhancementDetails: {
+          background: `Studio Backdrop (${options.preset || 'Studio Clean White'})`,
           lighting: 'AI High-Key Studio Lighting',
           contrastBoost: '+8%',
-          vibrancyBoost: '+10%',
+          vibrancyBoost: '+12%',
+          backgroundRemoved: true,
         },
       };
     }
   } catch (err) {
-    console.warn('Backend /api/image/enhance call unavailable, using Client Studio Engine:', err.message);
+    console.warn('Remove.bg cloud endpoint notice, using Client Studio Segmentation:', err.message);
   }
 
-  // 2. Guaranteed Client-Side Studio Compositor Fallback
+  // 2. Client-Side Studio Compositor with Foreground Segmentation Fallback
   try {
     const studioEnhancedBase64 = await renderClientStudioCompositor(imagePayload, options.preset || 'Studio Clean White');
     return {
@@ -211,6 +328,7 @@ export async function enhanceRawImage(imageInput, token = null, options = {}) {
         lighting: 'High-Key Artisan Diffuse Lighting',
         contrastBoost: '+8%',
         vibrancyBoost: '+12%',
+        backgroundRemoved: true,
       },
     };
   } catch (fallbackErr) {
@@ -230,7 +348,6 @@ export async function enhanceRawImage(imageInput, token = null, options = {}) {
 
 /**
  * Enhance a product's photo by Product ID
- * POST /api/products/:id/enhance
  */
 export async function enhanceProductById(productId, token, options = {}) {
   try {
@@ -239,7 +356,7 @@ export async function enhanceProductById(productId, token, options = {}) {
       headers: {
         Authorization: `Bearer ${token}`,
       },
-      timeout: 3000,
+      timeout: 8000,
       body: JSON.stringify({
         preset: options.preset || 'Studio Clean White',
         cropSquare: options.cropSquare !== false,

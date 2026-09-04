@@ -9,7 +9,7 @@ const DEMO_USER = {
   storeName: 'Mitti Karigar Handicrafts',
   location: 'Kutch, Gujarat, India',
   role: 'artisan',
-  avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=250&q=80'
+  avatar: '' // No random stock photo by default
 };
 
 /**
@@ -32,8 +32,12 @@ export async function registerUser(userData) {
       craftType: userData.craftType || 'Traditional Handicraft',
       storeName: userData.storeName || 'Artisan Workshop',
       location: userData.location || 'India',
-      role: 'artisan'
+      role: 'artisan',
+      avatar: ''
     };
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('karigar_user_profile', JSON.stringify(registeredUser));
+    }
     return {
       success: true,
       token: 'demo_token_' + Date.now(),
@@ -57,15 +61,27 @@ export async function loginUser(credentials) {
     const identifier = credentials.email || credentials.emailOrPhone || 'ramesh@karigar.in';
     const isDemo = identifier === 'ramesh@karigar.in' || identifier === '9876543210';
     
+    // Check if user already saved a custom profile in local storage
+    let savedProfile = null;
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('karigar_user_profile');
+        if (raw) savedProfile = JSON.parse(raw);
+      } catch (e) {}
+    }
+
+    const fallbackUser = isDemo ? DEMO_USER : {
+      ...DEMO_USER,
+      name: identifier.includes('@') ? identifier.split('@')[0] : 'Artisan ' + identifier.slice(-4),
+      email: identifier.includes('@') ? identifier : `${identifier}@karigar.in`,
+      phone: identifier.includes('@') ? '+91 98765 43210' : identifier,
+      avatar: (savedProfile && savedProfile.avatar && !savedProfile.avatar.includes('unsplash')) ? savedProfile.avatar : ''
+    };
+
     return {
       success: true,
       token: 'demo_token_' + Date.now(),
-      user: isDemo ? DEMO_USER : {
-        ...DEMO_USER,
-        name: identifier.includes('@') ? identifier.split('@')[0] : 'Artisan ' + identifier.slice(-4),
-        email: identifier.includes('@') ? identifier : `${identifier}@karigar.in`,
-        phone: identifier.includes('@') ? '+91 98765 43210' : identifier,
-      },
+      user: savedProfile || fallbackUser,
     };
   }
 }
@@ -90,6 +106,21 @@ export async function logoutUser() {
  * GET /api/auth/me
  */
 export async function getCurrentUser(token) {
+  // Check local profile first
+  if (typeof window !== 'undefined') {
+    try {
+      const raw = localStorage.getItem('karigar_user_profile');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.avatar && parsed.avatar.includes('unsplash')) {
+          parsed.avatar = '';
+          localStorage.setItem('karigar_user_profile', JSON.stringify(parsed));
+        }
+        return { success: true, user: parsed };
+      }
+    } catch (e) {}
+  }
+
   if (token && token.startsWith('demo_token_')) {
     return {
       success: true,
@@ -97,18 +128,27 @@ export async function getCurrentUser(token) {
     };
   }
   try {
-    return await apiRequest('/auth/me', {
+    const res = await apiRequest('/auth/me', {
       method: 'GET',
       headers: {
         Authorization: `Bearer ${token}`,
       },
+      timeout: 2500,
     });
+    if (res && res.user) {
+      if (res.user.avatar && res.user.avatar.includes('unsplash')) {
+        res.user.avatar = '';
+      }
+      return res;
+    }
   } catch (err) {
-    return {
-      success: true,
-      user: DEMO_USER,
-    };
+    console.warn('getCurrentUser note:', err.message);
   }
+
+  return {
+    success: true,
+    user: DEMO_USER,
+  };
 }
 
 /**
@@ -116,24 +156,38 @@ export async function getCurrentUser(token) {
  * PUT /api/auth/profile
  */
 export async function updateUserProfile(profileData, token) {
+  let updatedUser = {
+    ...profileData,
+  };
+
   try {
-    return await apiRequest('/auth/profile', {
+    const res = await apiRequest('/auth/profile', {
       method: 'PUT',
       headers: {
         Authorization: `Bearer ${token}`,
       },
+      timeout: 2500,
       body: JSON.stringify(profileData),
     });
+    if (res && res.user) {
+      updatedUser = res.user;
+    }
   } catch (err) {
-    console.warn('Backend update profile notice:', err.message);
-    return {
-      success: true,
-      user: {
-        ...DEMO_USER,
-        ...profileData,
-      },
-    };
+    console.warn('Backend update profile notice, saving locally:', err.message);
   }
+
+  if (typeof window !== 'undefined') {
+    try {
+      const existing = JSON.parse(localStorage.getItem('karigar_user_profile') || '{}');
+      const merged = { ...existing, ...updatedUser };
+      localStorage.setItem('karigar_user_profile', JSON.stringify(merged));
+    } catch (e) {}
+  }
+
+  return {
+    success: true,
+    user: updatedUser,
+  };
 }
 
 export default {

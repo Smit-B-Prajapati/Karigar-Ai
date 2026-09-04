@@ -111,8 +111,57 @@ export default function VoiceRecorderModal({
     let stream = null;
     let startedSpeech = false;
 
-    // 1. In-App Audio Recorder (Captures microphone stream directly in browser)
-    if (hasMediaDevices) {
+    // 1. Primary Engine: In-App Web Speech API Recognition (Native Gujarati, Hindi & English)
+    if (hasWebSpeech) {
+      try {
+        const recognizer = createSpeechRecognizer(selectedLanguage, {
+          shouldContinue: () => isRecordingRef.current,
+          onStart: () => {
+            console.log('[SpeechRecognition] Exclusive listening in', selectedLanguage);
+          },
+          onResult: ({ transcript: recognizedText }) => {
+            if (recognizedText && recognizedText.trim()) {
+              setTranscript(recognizedText.trim());
+              transcriptRef.current = recognizedText.trim();
+            }
+          },
+          onError: (event) => {
+            console.warn('[SpeechRecognition Event Error]:', event.error);
+            if (event.error === 'not-allowed') {
+              handleRecordingError(
+                selectedLanguage === 'gu-IN'
+                  ? 'માઇક્રોફોન પરવાનગી અસ્વીકાર. કૃપા કરીને બ્રાઉઝરમાં માઇકને મંજૂરી આપો.'
+                  : language === 'HI'
+                  ? 'माइक्रोफ़ोन अनुमति अस्वीकृत। कृपया ब्राउज़र में माइक की अनुमति दें।'
+                  : 'Microphone permission was denied. Please allow microphone access in your browser settings.'
+              );
+            } else if (event.error === 'network' || event.error === 'audio-capture') {
+              setLiveNotice(
+                selectedLanguage === 'gu-IN'
+                  ? 'લાઇવ બોલી ઓળખાઈ રહી છે. કૃપા કરીને સ્પષ્ટ અવાજમાં બોલો.'
+                  : language === 'HI'
+                  ? 'लाइव आवाज़ पहचानी जा रही है। कृपया माइक के पास स्पष्ट बोलें।'
+                  : 'Listening... Please speak clearly into the microphone.'
+              );
+            }
+          },
+          onEnd: () => {
+            console.log('[SpeechRecognition] Ended check');
+          }
+        });
+
+        if (recognizer) {
+          recognitionRef.current = recognizer;
+          recognizer.start();
+          startedSpeech = true;
+        }
+      } catch (speechErr) {
+        console.warn('Speech recognition exclusive init note:', speechErr);
+      }
+    }
+
+    // 2. Secondary Engine: Audio Recorder (ONLY if Web Speech API is not supported in current browser)
+    if (!startedSpeech && hasMediaDevices) {
       try {
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         const mediaRecorder = new MediaRecorder(stream);
@@ -133,57 +182,6 @@ export default function VoiceRecorderModal({
           );
           return;
         }
-      }
-    }
-
-    // 2. In-App Web Speech API Recognition for real-time transcription
-    if (hasWebSpeech) {
-      try {
-        let accumulatedText = '';
-        const recognizer = createSpeechRecognizer(selectedLanguage, {
-          shouldContinue: () => isRecordingRef.current,
-          onStart: () => {
-            console.log('[SpeechRecognition] In-app listening in', selectedLanguage);
-          },
-          onResult: ({ finalTranscript, interimTranscript }) => {
-            const current = (accumulatedText + ' ' + finalTranscript + ' ' + interimTranscript).trim();
-            if (finalTranscript) {
-              accumulatedText = (accumulatedText + ' ' + finalTranscript).trim();
-            }
-            const activeText = current || accumulatedText;
-            setTranscript(activeText);
-            transcriptRef.current = activeText;
-          },
-          onError: (event) => {
-            console.warn('[SpeechRecognition Event Error]:', event.error);
-            if (event.error === 'not-allowed') {
-              if (!stream) {
-                handleRecordingError(
-                  language === 'HI'
-                    ? 'माइक्रोफ़ोन अनुमति अस्वीकृत। कृपया ब्राउज़र में माइक की अनुमति दें।'
-                    : 'Microphone permission was denied. Please allow microphone access in your browser settings.'
-                );
-              }
-            } else if (event.error === 'audio-capture' || event.error === 'network' || event.error === 'service-not-allowed') {
-              setLiveNotice(
-                language === 'HI'
-                  ? 'लाइव ट्रांसक्रिप्शन धीमा है। रिकॉर्डिंग जारी है, समाप्त होने पर ऑडियो संसाधित होगा।'
-                  : 'Live preview slow. Audio is recording in-app and will be processed when you tap Stop.'
-              );
-            }
-          },
-          onEnd: () => {
-            console.log('[SpeechRecognition] In-app ended check');
-          }
-        });
-
-        if (recognizer) {
-          recognitionRef.current = recognizer;
-          recognizer.start();
-          startedSpeech = true;
-        }
-      } catch (speechErr) {
-        console.warn('Speech recognition init note:', speechErr);
       }
     }
 

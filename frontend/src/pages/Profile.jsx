@@ -30,7 +30,7 @@ export default function Profile({ currentLang, onToggleLang, addToast }) {
     email: user?.email || '',
     phone: user?.phone || '',
     location: user?.location || '',
-    avatar: user?.avatar || '',
+    avatar: (user?.avatar && !user.avatar.includes('unsplash')) ? user.avatar : '',
     preferredLanguage: user?.preferredLanguage || currentLang || language || 'EN',
   });
 
@@ -44,7 +44,7 @@ export default function Profile({ currentLang, onToggleLang, addToast }) {
         email: user.email || '',
         phone: user.phone || '',
         location: user.location || '',
-        avatar: user.avatar || '',
+        avatar: (user.avatar && !user.avatar.includes('unsplash')) ? user.avatar : '',
         preferredLanguage: user.preferredLanguage || currentLang || language || 'EN',
       });
     }

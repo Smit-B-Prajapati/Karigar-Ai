@@ -21,23 +21,26 @@ export function createSpeechRecognizer(language = 'hi-IN', callbacks = {}) {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   const recognition = new SpeechRecognition();
 
-  const isMobile = typeof navigator !== 'undefined' && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
-  recognition.continuous = !isMobile;
+  recognition.continuous = true;
   recognition.interimResults = true;
-  recognition.lang = language;
+  recognition.lang = language || 'hi-IN';
   recognition.maxAlternatives = 1;
 
   if (callbacks.onStart) recognition.onstart = callbacks.onStart;
+
   recognition.onend = (e) => {
     if (callbacks.shouldContinue && callbacks.shouldContinue()) {
-      try {
-        recognition.start();
-        return;
-      } catch (err) {
-        console.warn('[SpeechRecognition auto-restart note]:', err);
-      }
-    }
-    if (callbacks.onEnd) {
+      // Debounced auto-restart for mobile browsers when pausing between words
+      setTimeout(() => {
+        try {
+          if (callbacks.shouldContinue && callbacks.shouldContinue()) {
+            recognition.start();
+          }
+        } catch (err) {
+          console.warn('[SpeechRecognition auto-restart note]:', err);
+        }
+      }, 150);
+    } else if (callbacks.onEnd) {
       callbacks.onEnd(e);
     }
   };
@@ -47,16 +50,24 @@ export function createSpeechRecognizer(language = 'hi-IN', callbacks = {}) {
       let finalTranscript = '';
       let interimTranscript = '';
 
-      for (let i = event.resultIndex; i < event.results.length; i++) {
+      // Direct calculation from event.results ensures zero duplication and handles Gujarati & Hindi accurately
+      for (let i = 0; i < event.results.length; i++) {
         const transcriptChunk = event.results[i][0].transcript;
         if (event.results[i].isFinal) {
-          finalTranscript += transcriptChunk;
+          finalTranscript += transcriptChunk + ' ';
         } else {
           interimTranscript += transcriptChunk;
         }
       }
 
-      callbacks.onResult({ finalTranscript, interimTranscript, rawEvent: event });
+      const combined = (finalTranscript + interimTranscript).trim();
+
+      callbacks.onResult({
+        finalTranscript: finalTranscript.trim(),
+        interimTranscript: interimTranscript.trim(),
+        transcript: combined,
+        rawEvent: event
+      });
     };
   }
 
