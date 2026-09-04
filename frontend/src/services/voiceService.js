@@ -21,13 +21,26 @@ export function createSpeechRecognizer(language = 'hi-IN', callbacks = {}) {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   const recognition = new SpeechRecognition();
 
-  recognition.continuous = true;
+  const isMobile = typeof navigator !== 'undefined' && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+  recognition.continuous = !isMobile;
   recognition.interimResults = true;
   recognition.lang = language;
   recognition.maxAlternatives = 1;
 
   if (callbacks.onStart) recognition.onstart = callbacks.onStart;
-  if (callbacks.onEnd) recognition.onend = callbacks.onEnd;
+  recognition.onend = (e) => {
+    if (callbacks.shouldContinue && callbacks.shouldContinue()) {
+      try {
+        recognition.start();
+        return;
+      } catch (err) {
+        console.warn('[SpeechRecognition auto-restart note]:', err);
+      }
+    }
+    if (callbacks.onEnd) {
+      callbacks.onEnd(e);
+    }
+  };
   
   if (callbacks.onResult) {
     recognition.onresult = (event) => {
