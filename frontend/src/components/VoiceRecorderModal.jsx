@@ -105,6 +105,19 @@ export default function VoiceRecorderModal({
     audioChunksRef.current = [];
     isRecordingRef.current = true;
 
+    const isLocalNetworkHttp = typeof window !== 'undefined' &&
+      window.location.protocol === 'http:' &&
+      window.location.hostname !== 'localhost' &&
+      window.location.hostname !== '127.0.0.1';
+
+    // In Chrome on mobile over local HTTP (192.168.x.x), in-browser SpeechRecognition is blocked by Chrome security policy.
+    // Automatically trigger the phone's native sound recorder which has 100% support over HTTP!
+    if (isLocalNetworkHttp && audioFileInputRef.current) {
+      console.log('[VoiceRecorder] HTTP local network detected, opening native phone audio capture');
+      audioFileInputRef.current.click();
+      return;
+    }
+
     const hasWebSpeech = isSpeechRecognitionSupported();
     const hasMediaDevices = typeof navigator !== 'undefined' && 
       Boolean(navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function');
@@ -133,10 +146,19 @@ export default function VoiceRecorderModal({
           onError: (event) => {
             console.warn('[SpeechRecognition Event Error]:', event.error);
             if (event.error === 'not-allowed') {
+              if (isLocalNetworkHttp && audioFileInputRef.current) {
+                // Instantly launch phone recorder rather than stranding user
+                audioFileInputRef.current.click();
+                return;
+              }
               handleRecordingError(
-                language === 'HI'
-                  ? 'माइक्रोफ़ोन अनुमति अस्वीकृत। कृपया ब्राउज़र सेटिंग्स में माइक की अनुमति दें।'
-                  : 'Microphone permission was denied. Please allow microphone access in your browser settings.'
+                isLocalNetworkHttp
+                  ? (language === 'HI'
+                      ? 'Chrome लोकल वाई-फाई (HTTP) पर लाइव माइक ब्लॉक करता है। कृपया नीचे "फ़ोन माइक से रिकॉर्ड करें" टैप करें।'
+                      : 'Chrome blocks live in-browser mic over local Wi-Fi HTTP. Please tap "Record with Phone Microphone" below.')
+                  : (language === 'HI'
+                      ? 'माइक्रोफ़ोन अनुमति अस्वीकृत। कृपया ब्राउज़र सेटिंग्स में माइक की अनुमति दें।'
+                      : 'Microphone permission was denied. Please allow microphone access in your browser settings.')
               );
             } else if (event.error === 'audio-capture' || event.error === 'network' || event.error === 'service-not-allowed') {
               setLiveNotice(
@@ -797,52 +819,109 @@ export default function VoiceRecorderModal({
             </div>
           )}
 
-          {/* STATE 5: ERROR */}
+          {/* STATE 5: ERROR / INSECURE ORIGIN NOTICE */}
           {uiState === 'error' && (
-            <div style={{ textAlign: 'center', padding: '1rem 0' }}>
-              <div style={{ display: 'inline-flex', padding: '0.75rem', borderRadius: '50%', background: 'rgba(239, 68, 68, 0.15)', color: '#f87171', marginBottom: '0.8rem' }}>
-                <AlertTriangle size={28} />
+            <div style={{ textAlign: 'center', padding: '0.75rem 0' }}>
+              <div style={{ display: 'inline-flex', padding: '0.65rem', borderRadius: '50%', background: 'rgba(239, 68, 68, 0.12)', color: '#f87171', marginBottom: '0.6rem' }}>
+                <AlertTriangle size={26} />
               </div>
 
-              <div style={{ color: '#f87171', fontWeight: 700, fontSize: '1rem', marginBottom: '0.4rem' }}>
-                ⚠ Voice Recording Notice
+              <div style={{ color: '#f87171', fontWeight: 700, fontSize: '0.98rem', marginBottom: '0.35rem' }}>
+                ⚠ Local Network (HTTP) Browser Restriction
               </div>
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', maxWidth: '420px', margin: '0 auto 1.25rem auto' }}>
-                {errorMessage || 'Unable to record voice audio. You can use the sample prompt or type manually below.'}
+              <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', maxWidth: '440px', margin: '0 auto 1rem auto', lineHeight: '1.4' }}>
+                {errorMessage || 'Google Chrome blocks live in-browser mic streaming over plain Wi-Fi HTTP (192.168.x.x), even with phone permissions allowed. On Vercel (HTTPS), this works automatically.'}
               </p>
 
-              <button
-                type="button"
-                onClick={useFallbackSample}
-                style={{
-                  background: 'var(--accent-terracotta)',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: 'var(--radius-sm)',
-                  padding: '0.55rem 1rem',
-                  fontSize: '0.85rem',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  marginBottom: '1rem'
-                }}
-              >
-                ⚡ Load Sample Voice Transcript
-              </button>
+              {/* High-visibility Action Buttons */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', alignItems: 'center', marginBottom: '1.1rem' }}>
+                <button
+                  type="button"
+                  onClick={() => audioFileInputRef.current?.click()}
+                  style={{
+                    width: '100%',
+                    maxWidth: '340px',
+                    padding: '0.65rem 1rem',
+                    background: 'linear-gradient(135deg, #2563eb, #3b82f6)',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: 'var(--radius-sm)',
+                    fontSize: '0.88rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.45rem',
+                    boxShadow: '0 4px 14px rgba(37, 99, 235, 0.35)'
+                  }}
+                >
+                  <Mic size={18} />
+                  <span>📱 Record with Phone Microphone</span>
+                </button>
 
+                <div style={{ display: 'flex', gap: '0.5rem', width: '100%', maxWidth: '340px' }}>
+                  <button
+                    type="button"
+                    onClick={useFallbackSample}
+                    style={{
+                      flex: 1,
+                      background: 'rgba(255, 183, 3, 0.12)',
+                      border: '1px dashed var(--accent-gold)',
+                      color: 'var(--accent-gold)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '0.5rem 0.6rem',
+                      fontSize: '0.78rem',
+                      fontWeight: 600,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    ⚡ Load Sample Craft
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setErrorMessage('');
+                      setUiState('ready');
+                    }}
+                    style={{
+                      flex: 1,
+                      background: 'var(--bg-input)',
+                      border: '1px solid var(--border-color)',
+                      color: 'var(--text-secondary)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '0.5rem 0.6rem',
+                      fontSize: '0.78rem',
+                      fontWeight: 600,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    🔄 Try Again
+                  </button>
+                </div>
+              </div>
+
+              {/* Keyboard microphone input alternative */}
+              <div style={{ textAlign: 'left', marginBottom: '0.35rem' }}>
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                  Or tap below to speak using your phone keyboard's 🎙️ microphone:
+                </span>
+              </div>
               <textarea
                 value={transcript}
                 onChange={(e) => handleTranscriptChange(e.target.value)}
-                placeholder="Type your craft description manually here..."
-                rows={4}
+                placeholder="Tap here and use your keyboard's 🎙️ microphone icon to speak, or type craft description..."
+                rows={3}
                 style={{
                   width: '100%',
-                  padding: '0.85rem 1rem',
+                  padding: '0.75rem 0.9rem',
                   borderRadius: 'var(--radius-sm)',
                   background: 'var(--bg-input)',
                   border: '1px solid var(--border-color)',
                   color: 'var(--text-primary)',
-                  fontSize: '0.9rem',
-                  lineHeight: '1.5',
+                  fontSize: '0.88rem',
+                  lineHeight: '1.4',
                   resize: 'vertical',
                   textAlign: 'left'
                 }}
