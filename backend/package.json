@@ -1,0 +1,33 @@
+{
+  "name": "karigar-ai-backend",
+  "version": "1.0.0",
+  "description": "Backend API service for KarigarAI - From Handmade to Market-Ready in Minutes",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch-path=src --watch-path=server.js --watch server.js"
+  },
+  "keywords": [
+    "karigar-ai",
+    "express",
+    "api",
+    "artisans"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.9.4",
+    "morgan": "^1.10.0",
+    "multer": "^2.3.0",
+    "sharp": "^0.35.4"
+  },
+  "devDependencies": {
+    "mongodb-memory-server": "^11.2.0"
+  }
+}
