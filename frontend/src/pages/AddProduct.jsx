@@ -307,23 +307,35 @@ export default function AddProduct({ addToast }) {
         </p>
       </div>
 
-      {/* Compact Workflow Stepper */}
-      <div className="compact-stepper">
-        <div className="compact-step-item" style={{ opacity: currentStep >= 1 ? 1 : 0.45 }}>
-          <span className="compact-step-circle" style={{ background: currentStep >= 1 ? 'var(--accent-terracotta)' : 'var(--bg-input)', color: '#fff' }}>1</span>
-          <span className="compact-step-text">{t('addProduct.step1', 'Basics')}</span>
+      {/* 1, 2, 3 Stepper in ONE Single Line */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '0.45rem 0.85rem',
+        borderRadius: 'var(--radius-full)',
+        background: 'var(--bg-secondary)',
+        border: '1px solid var(--border-color)',
+        marginBottom: '1rem',
+        whiteSpace: 'nowrap',
+        overflowX: 'auto',
+        gap: '0.4rem'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', opacity: currentStep >= 1 ? 1 : 0.45 }}>
+          <span style={{ fontWeight: 900, fontSize: '0.85rem', color: currentStep >= 1 ? 'var(--accent-terracotta)' : 'var(--text-muted)' }}>1.</span>
+          <span style={{ fontWeight: 700, fontSize: '0.82rem' }}>{t('addProduct.step1', 'Basics')}</span>
         </div>
-        <ArrowRight size={14} color="var(--text-muted)" />
+        <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>➔</span>
 
-        <div className="compact-step-item" style={{ opacity: currentStep >= 2 ? 1 : 0.45 }}>
-          <span className="compact-step-circle" style={{ background: currentStep >= 2 ? 'var(--accent-terracotta)' : 'var(--bg-input)', color: '#fff' }}>2</span>
-          <span className="compact-step-text">{t('addProduct.step2', 'Photo')}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', opacity: currentStep >= 2 ? 1 : 0.45 }}>
+          <span style={{ fontWeight: 900, fontSize: '0.85rem', color: currentStep >= 2 ? 'var(--accent-terracotta)' : 'var(--text-muted)' }}>2.</span>
+          <span style={{ fontWeight: 700, fontSize: '0.82rem' }}>{t('addProduct.step2', 'Photo')}</span>
         </div>
-        <ArrowRight size={14} color="var(--text-muted)" />
+        <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>➔</span>
 
-        <div className="compact-step-item" style={{ opacity: currentStep >= 3 ? 1 : 0.45 }}>
-          <span className="compact-step-circle" style={{ background: currentStep >= 3 ? 'var(--accent-gold)' : 'var(--bg-input)', color: currentStep >= 3 ? '#000' : '#fff' }}>3</span>
-          <span className="compact-step-text">{t('addProduct.step3', 'Studio & AI')}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', opacity: currentStep >= 3 ? 1 : 0.45 }}>
+          <span style={{ fontWeight: 900, fontSize: '0.85rem', color: currentStep >= 3 ? 'var(--accent-gold)' : 'var(--text-muted)' }}>3.</span>
+          <span style={{ fontWeight: 700, fontSize: '0.82rem' }}>{t('addProduct.step3', 'AI Studio')}</span>
         </div>
       </div>
 
@@ -331,42 +343,71 @@ export default function AddProduct({ addToast }) {
       {currentStep === 1 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           
-          {/* Compact Voice Assistant Banner */}
-          <div className="compact-voice-banner">
-            <div className="compact-voice-left">
+          {/* Voice Assistant Banner with Big Mic Symbol (No Start Voice Button) */}
+          <div
+            onClick={() => setIsVoiceModalOpen(true)}
+            style={{
+              padding: '0.85rem 1.15rem',
+              borderRadius: 'var(--radius-lg)',
+              background: 'linear-gradient(135deg, rgba(230, 81, 0, 0.16) 0%, rgba(255, 183, 3, 0.1) 100%)',
+              border: '2px solid rgba(230, 81, 0, 0.45)',
+              boxShadow: '0 4px 20px rgba(230, 81, 0, 0.15)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '1rem',
+              cursor: 'pointer',
+              transition: 'transform 0.2s ease, box-shadow 0.2s ease'
+            }}
+          >
+            {/* Big Mic Symbol */}
+            <div style={{ position: 'relative', flexShrink: 0 }}>
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: '-6px',
+                  borderRadius: '50%',
+                  background: 'rgba(230, 81, 0, 0.28)',
+                  animation: 'pulse 1.8s infinite'
+                }}
+              />
               <button
                 type="button"
                 onClick={() => setIsVoiceModalOpen(true)}
-                className="compact-voice-mic-btn"
+                style={{
+                  position: 'relative',
+                  width: '56px',
+                  height: '56px',
+                  borderRadius: '50%',
+                  background: 'linear-gradient(135deg, var(--accent-terracotta), #ff7043)',
+                  border: '3px solid rgba(255, 255, 255, 0.5)',
+                  color: '#fff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 6px 18px rgba(230, 81, 0, 0.45)',
+                  cursor: 'pointer'
+                }}
                 title="Click to start Voice Assistant"
               >
-                <Mic size={20} />
+                <Mic size={28} />
               </button>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                  <h3 style={{ fontSize: '0.92rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
-                    {t('addProduct.voiceHeroTitle', '🎙️ Voice Craft Assistant')}
-                  </h3>
-                  <span style={{ background: 'var(--accent-gold)', color: '#000', fontSize: '0.62rem', fontWeight: 800, padding: '0.1rem 0.35rem', borderRadius: 'var(--radius-full)', textTransform: 'uppercase' }}>
-                    AI
-                  </span>
-                </div>
-                <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: '0.15rem 0 0 0' }}>
-                  {t('addProduct.voiceHeroDescCompact', 'Speak naturally in Hindi or English — AI automatically fills your form!')}
-                </p>
-              </div>
             </div>
 
-            <Button
-              type="button"
-              onClick={() => setIsVoiceModalOpen(true)}
-              variant="primary"
-              size="sm"
-              icon={<Mic size={14} />}
-              style={{ padding: '0.45rem 0.85rem', fontSize: '0.8rem', whiteSpace: 'nowrap' }}
-            >
-              {t('addProduct.startVoiceBtn', 'Start Voice')}
-            </Button>
+            {/* Voice Assistant Info Text */}
+            <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.15rem' }}>
+                <span style={{ background: 'var(--accent-gold)', color: '#000', fontSize: '0.62rem', fontWeight: 900, padding: '0.1rem 0.35rem', borderRadius: 'var(--radius-full)', textTransform: 'uppercase' }}>
+                  AI VOICE
+                </span>
+                <h3 style={{ fontSize: '0.98rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
+                  {t('addProduct.voiceHeroTitle', 'Voice Craft Assistant')}
+                </h3>
+              </div>
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.35 }}>
+                {t('addProduct.voiceHeroDescCompact', 'Tap microphone to speak craft details — AI auto-fills your form!')}
+              </p>
+            </div>
           </div>
 
           {/* Product Basics Form Card */}

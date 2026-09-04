@@ -204,9 +204,9 @@ export default function HomeDashboard({ addToast }) {
             transform: activeFilter === 'all' ? 'translateY(-2px)' : 'none',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
             <div className="home-stat-icon-box" style={{ background: 'rgba(184, 134, 155, 0.15)', color: 'var(--accent-primary)' }}>
-              <Package size={18} />
+              <Package size={16} />
             </div>
             <div>
               <p className="home-stat-label" style={{ color: activeFilter === 'all' ? 'var(--accent-primary)' : 'var(--text-muted)' }}>
@@ -217,9 +217,6 @@ export default function HomeDashboard({ addToast }) {
               </h3>
             </div>
           </div>
-          <p className="home-stat-subtext">
-            {t('home.allProducts', 'All Products')} ➔
-          </p>
         </button>
 
         {/* Stat Card 2: PUBLISHED */}
@@ -234,9 +231,9 @@ export default function HomeDashboard({ addToast }) {
             transform: activeFilter === 'published' ? 'translateY(-2px)' : 'none',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
             <div className="home-stat-icon-box" style={{ background: 'rgba(13, 148, 136, 0.12)', color: 'var(--success)' }}>
-              <CheckCircle2 size={18} />
+              <CheckCircle2 size={16} />
             </div>
             <div>
               <p className="home-stat-label" style={{ color: activeFilter === 'published' ? 'var(--success)' : 'var(--text-muted)' }}>
@@ -247,9 +244,6 @@ export default function HomeDashboard({ addToast }) {
               </h3>
             </div>
           </div>
-          <p className="home-stat-subtext">
-            {t('home.publishedProducts', 'Published Products')} ➔
-          </p>
         </button>
 
         {/* Stat Card 3: DRAFTS */}
@@ -264,9 +258,9 @@ export default function HomeDashboard({ addToast }) {
             transform: activeFilter === 'drafts' ? 'translateY(-2px)' : 'none',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
             <div className="home-stat-icon-box" style={{ background: 'rgba(217, 119, 6, 0.12)', color: 'var(--warning)' }}>
-              <FileText size={18} />
+              <FileText size={16} />
             </div>
             <div>
               <p className="home-stat-label" style={{ color: activeFilter === 'drafts' ? 'var(--warning)' : 'var(--text-muted)' }}>
@@ -277,9 +271,6 @@ export default function HomeDashboard({ addToast }) {
               </h3>
             </div>
           </div>
-          <p className="home-stat-subtext">
-            {t('home.draftProducts', 'Draft Products')} ➔
-          </p>
         </button>
 
         {/* Stat Card 4: CATALOGUE VALUE */}
@@ -294,9 +285,9 @@ export default function HomeDashboard({ addToast }) {
             transform: activeFilter === 'value' ? 'translateY(-2px)' : 'none',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
             <div className="home-stat-icon-box" style={{ background: 'rgba(232, 151, 88, 0.15)', color: 'var(--accent-gold)' }}>
-              <DollarSign size={18} />
+              <DollarSign size={16} />
             </div>
             <div>
               <p className="home-stat-label" style={{ color: activeFilter === 'value' ? 'var(--accent-gold)' : 'var(--text-muted)' }}>
@@ -307,9 +298,6 @@ export default function HomeDashboard({ addToast }) {
               </h3>
             </div>
           </div>
-          <p className="home-stat-subtext">
-            {t('home.totalValue', 'Catalogue Value')} ➔
-          </p>
         </button>
       </div>
 
@@ -317,7 +305,7 @@ export default function HomeDashboard({ addToast }) {
       <div>
         <Card 
           title={filterMeta.title}
-          subtitle={filterMeta.subtitle}
+          subtitle={null}
           action={
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
               {activeFilter !== 'all' && (

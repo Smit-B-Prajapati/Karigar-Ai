@@ -635,13 +635,13 @@ a {
 .home-stats-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 1rem;
-  margin-bottom: 1.85rem;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
 }
 
 .home-stat-btn {
   border-radius: var(--radius-md);
-  padding: 0.95rem 1rem;
+  padding: 0.6rem 0.75rem;
   text-align: left;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -657,8 +657,8 @@ a {
 }
 
 .home-stat-icon-box {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
@@ -667,7 +667,7 @@ a {
 }
 
 .home-stat-label {
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -675,18 +675,11 @@ a {
 }
 
 .home-stat-value {
-  font-size: 1.45rem;
+  font-size: 1.25rem;
   font-weight: 800;
   color: var(--text-primary);
-  margin: 0.15rem 0 0 0;
-  line-height: 1.2;
-}
-
-.home-stat-subtext {
-  font-size: 0.7rem;
-  color: var(--text-muted);
-  margin-top: 0.45rem;
-  margin-bottom: 0;
+  margin: 0.1rem 0 0 0;
+  line-height: 1.1;
 }
 
 /* Home Products List - Minimalist & Compact */
@@ -761,30 +754,25 @@ a {
 @media (max-width: 768px) {
   .home-stats-grid {
     grid-template-columns: repeat(2, 1fr);
-    gap: 0.6rem;
-    margin-bottom: 1.25rem;
+    gap: 0.45rem;
+    margin-bottom: 0.85rem;
   }
 
   .home-stat-btn {
-    padding: 0.7rem 0.8rem;
+    padding: 0.5rem 0.6rem;
   }
 
   .home-stat-icon-box {
-    width: 30px;
-    height: 30px;
+    width: 26px;
+    height: 26px;
   }
 
   .home-stat-label {
-    font-size: 0.66rem;
+    font-size: 0.62rem;
   }
 
   .home-stat-value {
-    font-size: 1.22rem;
-  }
-
-  .home-stat-subtext {
-    font-size: 0.65rem;
-    margin-top: 0.3rem;
+    font-size: 1.15rem;
   }
 
   .home-product-row {

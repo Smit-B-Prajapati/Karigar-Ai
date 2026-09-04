@@ -689,7 +689,7 @@ export default function VoiceRecorderModal({
               {isParsing ? (
                 <div style={{ marginTop: '0.85rem', fontSize: '0.82rem', color: 'var(--accent-gold)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                   <Sparkles size={14} className="spinner" />
-                  <span>Extracting title, material, category, price & cost...</span>
+                  <span>Extracting title, material, category & craft details...</span>
                 </div>
               ) : extractedFields ? (
                 <div style={{
@@ -706,7 +706,7 @@ export default function VoiceRecorderModal({
                     </div>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.5rem', fontSize: '0.82rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.5rem', fontSize: '0.82rem' }}>
                     <div style={{ background: 'rgba(0,0,0,0.2)', padding: '0.4rem 0.6rem', borderRadius: '4px' }}>
                       <strong style={{ color: 'var(--text-muted)' }}>Title:</strong> <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{extractedFields.name}</span>
                     </div>
@@ -718,9 +718,6 @@ export default function VoiceRecorderModal({
                     </div>
                     <div style={{ background: 'rgba(0,0,0,0.2)', padding: '0.4rem 0.6rem', borderRadius: '4px' }}>
                       <strong style={{ color: 'var(--text-muted)' }}>Technique:</strong> <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{extractedFields.craftType}</span>
-                    </div>
-                    <div style={{ background: 'rgba(0,0,0,0.2)', padding: '0.4rem 0.6rem', borderRadius: '4px' }}>
-                      <strong style={{ color: 'var(--text-muted)' }}>Selling Price:</strong> <span style={{ color: 'var(--accent-gold)', fontWeight: 800 }}>₹{extractedFields.price}</span>
                     </div>
                     <div style={{ background: 'rgba(0,0,0,0.2)', padding: '0.4rem 0.6rem', borderRadius: '4px' }}>
                       <strong style={{ color: 'var(--text-muted)' }}>Material Cost:</strong> <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>₹{extractedFields.materialCost}</span>
@@ -830,32 +827,68 @@ export default function VoiceRecorderModal({
         {/* Footer Actions */}
         <div
           style={{
-            padding: '1rem 1.5rem',
-            borderTop: '1px solid var(--border-color)',
+            padding: '1rem 1.25rem',
+            borderTop: '1px solid rgba(255, 255, 255, 0.1)',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            background: 'rgba(0,0,0,0.2)'
+            gap: '0.75rem',
+            background: 'var(--bg-card)'
           }}
         >
-          <Button type="button" onClick={onClose} variant="secondary">
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              padding: '0.6rem 1.25rem',
+              borderRadius: 'var(--radius-full)',
+              background: 'transparent',
+              border: '1.5px solid var(--border-color)',
+              color: 'var(--text-secondary)',
+              fontSize: '0.86rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              minHeight: '38px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
             Cancel
-          </Button>
+          </button>
 
           {uiState === 'recording' ? (
             <Button type="button" onClick={handleStopRecording} variant="danger" icon={<Square size={16} />}>
               Stop Recording
             </Button>
           ) : (
-            <Button
+            <button
               type="button"
               onClick={handleApply}
               disabled={!transcript.trim()}
-              variant="primary"
-              icon={<Sparkles size={16} />}
+              style={{
+                padding: '0.6rem 1.35rem',
+                borderRadius: 'var(--radius-full)',
+                background: transcript.trim()
+                  ? 'linear-gradient(135deg, var(--accent-terracotta), #ff7043)'
+                  : 'rgba(255, 255, 255, 0.08)',
+                border: 'none',
+                color: transcript.trim() ? '#fff' : 'var(--text-muted)',
+                fontSize: '0.88rem',
+                fontWeight: 800,
+                cursor: transcript.trim() ? 'pointer' : 'not-allowed',
+                boxShadow: transcript.trim() ? '0 4px 14px rgba(230, 81, 0, 0.35)' : 'none',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                transition: 'all 0.2s ease',
+                minHeight: '38px'
+              }}
             >
-              Auto-Fill All Form Fields ➔
-            </Button>
+              <Sparkles size={16} />
+              <span>Auto-Fill All Form Fields ➔</span>
+            </button>
           )}
         </div>
       </div>
