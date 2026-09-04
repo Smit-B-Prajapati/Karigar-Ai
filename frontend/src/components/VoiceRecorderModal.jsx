@@ -259,6 +259,13 @@ export default function VoiceRecorderModal({
 
   const processFinalTranscript = async (textToProcess) => {
     setIsParsing(true);
+
+    // Hard safety timeout: guarantee the spinner never stays longer than 1.8s under any network circumstance
+    const safetyTimeout = setTimeout(() => {
+      setIsParsing(false);
+      setUiState('complete');
+    }, 1800);
+
     try {
       const parseRes = await parseVoiceTranscript(textToProcess, selectedLanguage, token);
       if (parseRes && parseRes.extracted) {
@@ -274,6 +281,7 @@ export default function VoiceRecorderModal({
     } catch (parseErr) {
       console.warn('Voice field extraction warning:', parseErr);
     } finally {
+      clearTimeout(safetyTimeout);
       setIsParsing(false);
       setUiState('complete');
     }

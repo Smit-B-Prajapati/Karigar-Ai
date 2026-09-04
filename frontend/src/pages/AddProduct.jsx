@@ -114,22 +114,21 @@ export default function AddProduct({ addToast }) {
 
     let enhancedResultUrl = '';
 
-    // Step 2: Background Removal
-    const step2Timer = setTimeout(() => {
-      setPipelineStep(2);
-      setPipelineStatus(language === 'HI' ? 'AI द्वारा बैकग्राउंड हटाया जा रहा है...' : 'Removing background & generating studio white backdrop...');
-    }, 450);
+    // Step 2: Background Removal Stage
+    setPipelineStep(2);
+    setPipelineStatus(language === 'HI' ? 'AI द्वारा बैकग्राउंड हटाया जा रहा है...' : 'Removing background & generating studio white backdrop...');
+    await new Promise(r => setTimeout(r, 500));
+
+    // Step 3: Enhancing Image Lighting & Contrast
+    setPipelineStep(3);
+    setPipelineStatus(language === 'HI' ? 'स्टूडियो लाइटिंग और स्पष्टता बढ़ाई जा रही है...' : 'Enhancing studio lighting, clarity & contrast...');
 
     // 1. Run Photo Enhancement
     try {
       const enhanceRes = await enhancePhoto(optimizedBase64, 'temp-prod', { preset: 'Studio Clean White' }, token);
-      clearTimeout(step2Timer);
-      
-      setPipelineStep(3); // 3: Enhancing Image
-      setPipelineStatus(language === 'HI' ? 'स्टूडियो लाइटिंग और स्पष्टता बढ़ाई जा रही है...' : 'Enhancing studio lighting, clarity & contrast...');
 
-      if (enhanceRes.success && (enhanceRes.enhancedImageUrl || enhanceRes.enhancedBase64)) {
-        enhancedResultUrl = enhanceRes.enhancedBase64 || enhanceRes.enhancedImageUrl;
+      if (enhanceRes.success && (enhanceRes.enhancedImageUrl || enhanceRes.enhancedBase64 || enhanceRes.enhancedImage)) {
+        enhancedResultUrl = enhanceRes.enhancedBase64 || enhanceRes.enhancedImageUrl || enhanceRes.enhancedImage;
         setEnhancedImage(enhancedResultUrl);
         setSelectedImageChoice('enhanced');
         setMobileStudioTab('enhanced');
@@ -141,7 +140,7 @@ export default function AddProduct({ addToast }) {
           if (studioPresentationRef.current) {
             studioPresentationRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
           }
-        }, 200);
+        }, 250);
       } else {
         setEnhancementError(enhanceRes.message || 'Photo enhancement is temporarily unavailable.');
         setSelectedImageChoice('original');
@@ -149,7 +148,6 @@ export default function AddProduct({ addToast }) {
         setPipelineStatus(language === 'HI' ? 'मूल फ़ोटो सुरक्षित' : 'Completed with original photo');
       }
     } catch (enhErr) {
-      clearTimeout(step2Timer);
       console.warn('Studio photo enhancement notice:', enhErr.message);
       setEnhancementError(enhErr.message || 'Photo enhancement encountered an issue. Original photo preserved.');
       setSelectedImageChoice('original');

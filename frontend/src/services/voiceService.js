@@ -79,27 +79,38 @@ export function createSpeechRecognizer(language = 'hi-IN', callbacks = {}) {
  * @returns {Promise<{ success: boolean, transcript: string, language: string }>}
  */
 export async function sendAudioToBackendSTT(audioBlobOrBase64, language, token) {
-  let audioBase64 = audioBlobOrBase64;
+  try {
+    let audioBase64 = audioBlobOrBase64;
 
-  if (audioBlobOrBase64 instanceof Blob) {
-    audioBase64 = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(audioBlobOrBase64);
+    if (audioBlobOrBase64 instanceof Blob) {
+      audioBase64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(audioBlobOrBase64);
+      });
+    }
+
+    const res = await apiRequest('/ai/speech-to-text', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      timeout: 2000,
+      body: JSON.stringify({
+        audio: audioBase64,
+        language: language || 'hi-IN',
+      }),
     });
+    return res;
+  } catch (err) {
+    console.warn('Backend STT unavailable or timed out:', err.message);
+    return {
+      success: false,
+      transcript: '',
+      message: err.message,
+    };
   }
-
-  return await apiRequest('/ai/speech-to-text', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({
-      audio: audioBase64,
-      language: language || 'hi-IN',
-    }),
-  });
 }
 
 /**
@@ -470,6 +481,7 @@ export async function parseVoiceTranscript(transcript, language = 'hi-IN', token
       headers: {
         Authorization: `Bearer ${token}`,
       },
+      timeout: 2000,
       body: JSON.stringify({
         transcript: transcript.trim(),
         language
