@@ -17,6 +17,18 @@ export async function optimizeImageForUpload(input, options = {}) {
   const maxDim = options.maxDimension || 1200;
   const quality = options.quality !== undefined ? options.quality : 0.85;
 
+  // Fast-path: if input is already an optimized data URL (<800KB), return immediately without re-rendering
+  if (typeof input === 'string' && input.startsWith('data:image/') && input.length < 800 * 1024) {
+    return {
+      base64: input,
+      file: null,
+      width: 1000,
+      height: 1000,
+      sizeBytes: Math.round(input.length * 0.75),
+      originalSizeBytes: input.length,
+    };
+  }
+
   let dataUrl = '';
   let originalFilename = 'craft-photo.jpg';
   let originalSizeBytes = 0;
@@ -36,6 +48,27 @@ export async function optimizeImageForUpload(input, options = {}) {
   }
 
   return new Promise((resolve) => {
+    let isDone = false;
+    const safeResolve = (data) => {
+      if (!isDone) {
+        isDone = true;
+        clearTimeout(timer);
+        resolve(data);
+      }
+    };
+
+    // Safety timeout (3.5s) to guarantee no canvas hang on mobile
+    const timer = setTimeout(() => {
+      safeResolve({
+        base64: typeof input === 'string' ? input : dataUrl,
+        file: input instanceof File ? input : null,
+        width: 1000,
+        height: 1000,
+        sizeBytes: originalSizeBytes || 100000,
+        originalSizeBytes: originalSizeBytes || 100000,
+      });
+    }, 3500);
+
     const img = new Image();
     img.crossOrigin = 'anonymous';
 

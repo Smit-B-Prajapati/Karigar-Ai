@@ -32,9 +32,9 @@ export default function AddProduct({ addToast }) {
     category: 'Pottery & Ceramics',
     material: '',
     craftType: '',
-    price: '750',
-    materialCost: '450',
-    labourCost: '300',
+    price: '',
+    materialCost: '',
+    labourCost: '0',
     description: '',
     photoData: '',
     photoFile: null
@@ -54,7 +54,6 @@ export default function AddProduct({ addToast }) {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
   const [voiceFilled, setVoiceFilled] = useState(false);
-  const [isParsingDemo, setIsParsingDemo] = useState(false);
 
   // Voice details extractor handler
   const handleApplyVoiceData = (extracted) => {
@@ -75,28 +74,6 @@ export default function AddProduct({ addToast }) {
       description: extracted.description || prev.description,
     }));
     setVoiceFilled(true);
-  };
-
-  // Quick Demo Voice Parser
-  const handleDemoVoiceParse = async () => {
-    setIsParsingDemo(true);
-    const sampleText = 'यह हाथ से बनी पारंपरिक टेराकोटा चाय कुल्हड़ है जो प्राकृतिक मिट्टी से चाक पर बनाई गई है। इसकी सामग्री मिट्टी है और लागत 450 रुपये है और मैं इसे 750 रुपये में बेचना चाहता हूँ।';
-    const lang = 'hi-IN';
-
-    try {
-      const res = await parseVoiceTranscript(sampleText, lang, token);
-      if (res && res.extracted) {
-        handleApplyVoiceData({
-          ...res.extracted,
-          description: sampleText
-        });
-        if (addToast) addToast(lang === 'hi-IN' ? 'शिल्प विवरण फॉर्म में भर दिए गए हैं!' : 'Voice details extracted and populated into form!', 'success');
-      }
-    } catch (err) {
-      console.warn('Demo voice parse error:', err);
-    } finally {
-      setIsParsingDemo(false);
-    }
   };
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -223,10 +200,10 @@ export default function AddProduct({ addToast }) {
       setCurrentStep(1);
       return;
     }
-    if (!formData.price || parseFloat(formData.price) <= 0) {
-      if (addToast) addToast(t('addProduct.sellingPriceLabel', 'Please enter a valid selling price'), 'error');
-      return;
-    }
+
+    const calculatedPrice = formData.price && parseFloat(formData.price) > 0
+      ? parseFloat(formData.price)
+      : (formData.materialCost ? Math.round(parseFloat(formData.materialCost) * 1.6) : 0);
 
     setIsSubmitting(true);
     try {
@@ -237,7 +214,7 @@ export default function AddProduct({ addToast }) {
         material: formData.material,
         craftType: formData.craftType,
         description: formData.description,
-        price: parseFloat(formData.price),
+        price: calculatedPrice,
         materialCost: formData.materialCost ? parseFloat(formData.materialCost) : 0,
         labourCost: formData.labourCost ? parseFloat(formData.labourCost) : 0,
         originalImage: formData.photoData || '',
@@ -322,222 +299,87 @@ export default function AddProduct({ addToast }) {
   return (
     <div className="main-container" style={{ maxWidth: '960px' }}>
       
-      {/* Page Title */}
-      <div style={{ marginBottom: '1.75rem' }}>
-        <h1 style={{ fontSize: '1.8rem', fontWeight: 900 }}>{t('addProduct.pageTitle', 'Add New Artisan Product')}</h1>
-        <p style={{ fontSize: '0.95rem', color: 'var(--text-secondary)' }}>
+      {/* Page Title - Compact & Clean */}
+      <div style={{ marginBottom: '1rem' }}>
+        <h1 style={{ fontSize: '1.45rem', fontWeight: 800, margin: '0 0 0.25rem 0' }}>{t('addProduct.pageTitle', 'Add New Artisan Product')}</h1>
+        <p style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', margin: 0 }}>
           {t('addProduct.pageSubtitle', 'Create a market-ready listing with step-by-step AI studio automation.')}
         </p>
       </div>
 
-      {/* Workflow Step Progress Header Bar */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: '2rem',
-        padding: '0.85rem 1.25rem',
-        borderRadius: 'var(--radius-md)',
-        background: 'var(--bg-secondary)',
-        border: '1px solid var(--border-color)',
-        gap: '0.5rem',
-        flexWrap: 'wrap'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', opacity: currentStep >= 1 ? 1 : 0.45 }}>
-          <span style={{ width: '28px', height: '28px', borderRadius: '50%', background: currentStep >= 1 ? 'var(--accent-terracotta)' : 'var(--bg-input)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '0.85rem' }}>1</span>
-          <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>{t('addProduct.step1', 'Product Basics')}</span>
+      {/* Compact Workflow Stepper */}
+      <div className="compact-stepper">
+        <div className="compact-step-item" style={{ opacity: currentStep >= 1 ? 1 : 0.45 }}>
+          <span className="compact-step-circle" style={{ background: currentStep >= 1 ? 'var(--accent-terracotta)' : 'var(--bg-input)', color: '#fff' }}>1</span>
+          <span className="compact-step-text">{t('addProduct.step1', 'Basics')}</span>
         </div>
-        <ArrowRight size={16} color="var(--text-muted)" />
+        <ArrowRight size={14} color="var(--text-muted)" />
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', opacity: currentStep >= 2 ? 1 : 0.45 }}>
-          <span style={{ width: '28px', height: '28px', borderRadius: '50%', background: currentStep >= 2 ? 'var(--accent-terracotta)' : 'var(--bg-input)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '0.85rem' }}>2</span>
-          <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>{t('addProduct.step2', 'Product Photo')}</span>
+        <div className="compact-step-item" style={{ opacity: currentStep >= 2 ? 1 : 0.45 }}>
+          <span className="compact-step-circle" style={{ background: currentStep >= 2 ? 'var(--accent-terracotta)' : 'var(--bg-input)', color: '#fff' }}>2</span>
+          <span className="compact-step-text">{t('addProduct.step2', 'Photo')}</span>
         </div>
-        <ArrowRight size={16} color="var(--text-muted)" />
+        <ArrowRight size={14} color="var(--text-muted)" />
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', opacity: currentStep >= 3 ? 1 : 0.45 }}>
-          <span style={{ width: '28px', height: '28px', borderRadius: '50%', background: currentStep >= 3 ? 'var(--accent-gold)' : 'var(--bg-input)', color: currentStep >= 3 ? '#000' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '0.85rem' }}>3</span>
-          <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>{t('addProduct.step3', 'Studio & AI Analysis')}</span>
+        <div className="compact-step-item" style={{ opacity: currentStep >= 3 ? 1 : 0.45 }}>
+          <span className="compact-step-circle" style={{ background: currentStep >= 3 ? 'var(--accent-gold)' : 'var(--bg-input)', color: currentStep >= 3 ? '#000' : '#fff' }}>3</span>
+          <span className="compact-step-text">{t('addProduct.step3', 'Studio & AI')}</span>
         </div>
       </div>
 
       {/* STEP 1: Product Basics */}
       {currentStep === 1 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           
-          {/* HERO VOICE ASSISTANT BANNER - MAIN FOCUS */}
-          <div
-            style={{
-              padding: '1.75rem 1.5rem',
-              borderRadius: 'var(--radius-lg)',
-              background: 'linear-gradient(135deg, rgba(230, 81, 0, 0.22) 0%, rgba(255, 183, 3, 0.12) 100%)',
-              border: '2px solid rgba(230, 81, 0, 0.45)',
-              boxShadow: '0 12px 30px rgba(230, 81, 0, 0.2)',
-              position: 'relative',
-              overflow: 'hidden'
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap' }}>
-              
-              {/* Pulsing Mic Hero Icon */}
-              <div style={{ position: 'relative' }}>
-                <div
-                  style={{
-                    position: 'absolute',
-                    inset: '-8px',
-                    borderRadius: '50%',
-                    background: 'rgba(230, 81, 0, 0.25)',
-                    animation: 'pulse 1.8s infinite'
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => setIsVoiceModalOpen(true)}
-                  style={{
-                    position: 'relative',
-                    width: '80px',
-                    height: '80px',
-                    borderRadius: '50%',
-                    background: 'linear-gradient(135deg, var(--accent-terracotta), #ff7043)',
-                    border: '4px solid rgba(255, 255, 255, 0.3)',
-                    color: '#fff',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    boxShadow: '0 8px 24px rgba(230, 81, 0, 0.5)',
-                    transition: 'transform 0.2s ease'
-                  }}
-                  title="Click to start Voice Assistant"
-                >
-                  <Mic size={38} />
-                </button>
-              </div>
-
-              {/* Title & Description */}
-              <div style={{ flex: '1', minWidth: '260px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
-                  <span style={{ background: 'var(--accent-gold)', color: '#000', fontSize: '0.72rem', fontWeight: 900, padding: '0.2rem 0.6rem', borderRadius: 'var(--radius-full)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                    {t('addProduct.voiceHeroBadge', 'Voice-First AI Listing')}
-                  </span>
-                  <h2 style={{ fontSize: '1.3rem', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>
+          {/* Compact Voice Assistant Banner */}
+          <div className="compact-voice-banner">
+            <div className="compact-voice-left">
+              <button
+                type="button"
+                onClick={() => setIsVoiceModalOpen(true)}
+                className="compact-voice-mic-btn"
+                title="Click to start Voice Assistant"
+              >
+                <Mic size={20} />
+              </button>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <h3 style={{ fontSize: '0.92rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
                     {t('addProduct.voiceHeroTitle', '🎙️ Voice Craft Assistant')}
-                  </h2>
+                  </h3>
+                  <span style={{ background: 'var(--accent-gold)', color: '#000', fontSize: '0.62rem', fontWeight: 800, padding: '0.1rem 0.35rem', borderRadius: 'var(--radius-full)', textTransform: 'uppercase' }}>
+                    AI
+                  </span>
                 </div>
-                <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.45 }}>
-                  {t('addProduct.voiceHeroDesc', 'Speak your craft details naturally in Hindi or English. AI automatically fills Title, Category, Material, Technique, Price, Cost, and Story into your form fields!')}
+                <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: '0.15rem 0 0 0' }}>
+                  {t('addProduct.voiceHeroDescCompact', 'Speak naturally in Hindi or English — AI automatically fills your form!')}
                 </p>
               </div>
-
-              {/* Primary Voice Action Button */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', minWidth: '200px' }}>
-                <Button
-                  type="button"
-                  onClick={() => setIsVoiceModalOpen(true)}
-                  variant="primary"
-                  icon={<Mic size={18} />}
-                  style={{ width: '100%', justifyContent: 'center', padding: '0.85rem 1.25rem', fontWeight: 800, fontSize: '0.95rem' }}
-                >
-                  {t('addProduct.startVoiceBtn', 'Start Voice Assistant 🎙️')}
-                </Button>
-              </div>
-
             </div>
 
-            {/* Quick Demo Sample Prompts Bar (English & Hindi only) */}
-            <div style={{
-              marginTop: '1.25rem',
-              paddingTop: '1rem',
-              borderTop: '1px dashed rgba(255, 255, 255, 0.15)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.75rem',
-              flexWrap: 'wrap'
-            }}>
-              <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--accent-gold)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                <Sparkles size={14} /> {t('addProduct.quickDemoSamples', 'Quick Demo Samples (Click to Test):')}
-              </span>
-
-              <button
-                type="button"
-                disabled={isParsingDemo}
-                onClick={() => handleTriggerVoiceDemo(
-                  'यह हस्तनिर्मित जयपुर टेराकोटा गुलदस्ता है। प्राकृतिक मिट्टी से चाक पर बनाया गया है। कीमत 750 रुपये और सामग्री लागत 450 रुपये है।',
-                  'hi-IN'
-                )}
-                style={{
-                  background: 'rgba(255, 255, 255, 0.08)',
-                  border: '1px solid var(--border-color)',
-                  color: 'var(--text-primary)',
-                  borderRadius: 'var(--radius-sm)',
-                  padding: '0.4rem 0.75rem',
-                  fontSize: '0.8rem',
-                  cursor: 'pointer',
-                  fontWeight: 600,
-                  transition: 'var(--transition-smooth)'
-                }}
-              >
-                {t('addProduct.demoHindi', '🇮🇳 Demo (Hindi Pottery)')}
-              </button>
-
-              <button
-                type="button"
-                disabled={isParsingDemo}
-                onClick={() => handleTriggerVoiceDemo(
-                  'આ હાથથી બનાવેલું કચ્છ રોગન આર્ટ વોલ હેંગિંગ છે. કુદરતી એરંડાના તેલ અને રંગોથી કાપડ પર બનેલું છે. વેચાણ કિંમત 950 રૂપિયા અને સામગ્રી ખર્ચ 550 રૂપિયા છે.',
-                  'gu-IN'
-                )}
-                style={{
-                  background: 'rgba(255, 255, 255, 0.08)',
-                  border: '1px solid var(--border-color)',
-                  color: 'var(--text-primary)',
-                  borderRadius: 'var(--radius-sm)',
-                  padding: '0.4rem 0.75rem',
-                  fontSize: '0.8rem',
-                  cursor: 'pointer',
-                  fontWeight: 600,
-                  transition: 'var(--transition-smooth)'
-                }}
-              >
-                {t('addProduct.demoGujarati', '🇮🇳 Demo (Gujarati Rogan Art)')}
-              </button>
-
-              <button
-                type="button"
-                disabled={isParsingDemo}
-                onClick={() => handleTriggerVoiceDemo(
-                  'Hand-painted Jaipur Terracotta Vase made with organic clay on wheel pottery. Target price 750 rupees with material cost 450 rupees.',
-                  'en-IN'
-                )}
-                style={{
-                  background: 'rgba(255, 255, 255, 0.08)',
-                  border: '1px solid var(--border-color)',
-                  color: 'var(--text-primary)',
-                  borderRadius: 'var(--radius-sm)',
-                  padding: '0.4rem 0.75rem',
-                  fontSize: '0.8rem',
-                  cursor: 'pointer',
-                  fontWeight: 600,
-                  transition: 'var(--transition-smooth)'
-                }}
-              >
-                {t('addProduct.demoEnglish', '🌐 Demo (English Craft)')}
-              </button>
-            </div>
-
+            <Button
+              type="button"
+              onClick={() => setIsVoiceModalOpen(true)}
+              variant="primary"
+              size="sm"
+              icon={<Mic size={14} />}
+              style={{ padding: '0.45rem 0.85rem', fontSize: '0.8rem', whiteSpace: 'nowrap' }}
+            >
+              {t('addProduct.startVoiceBtn', 'Start Voice')}
+            </Button>
           </div>
 
           {/* Product Basics Form Card */}
-          <Card title="Step 1: Product Basics Form" subtitle="All fields below are populated by Voice AI and can be freely modified anytime.">
+          <Card title={t('addProduct.step1Title', 'Step 1: Product Basics Form')} subtitle={t('addProduct.step1Subtitle', 'Fill or speak craft details below. Can be modified anytime.')}>
             {voiceFilled && (
               <div style={{
-                padding: '0.9rem 1.1rem',
+                padding: '0.75rem 1rem',
                 borderRadius: 'var(--radius-sm)',
                 background: 'rgba(16, 185, 129, 0.12)',
                 border: '1px solid rgba(16, 185, 129, 0.3)',
                 color: 'var(--success)',
-                fontSize: '0.88rem',
-                marginBottom: '1.25rem',
+                fontSize: '0.85rem',
+                marginBottom: '1rem',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
@@ -545,13 +387,13 @@ export default function AddProduct({ addToast }) {
                 gap: '0.5rem'
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                  <CheckCircle2 size={18} />
-                  <span><strong>✨ Voice Details Extracted!</strong> Fields populated from spoken audio. You can edit any field anytime.</span>
+                  <CheckCircle2 size={16} />
+                  <span><strong>✨ Voice Details Extracted!</strong> Fields populated from spoken audio.</span>
                 </div>
                 <button
                   type="button"
                   onClick={() => setIsVoiceModalOpen(true)}
-                  style={{ background: 'none', border: 'none', color: 'var(--accent-terracotta)', fontWeight: 800, cursor: 'pointer', fontSize: '0.82rem' }}
+                  style={{ background: 'none', border: 'none', color: 'var(--accent-terracotta)', fontWeight: 800, cursor: 'pointer', fontSize: '0.8rem' }}
                 >
                   Speak Again 🎙️
                 </button>
@@ -569,7 +411,7 @@ export default function AddProduct({ addToast }) {
                 required
               />
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.85rem' }}>
                 <Input 
                   label={t('addProduct.categoryLabel', 'Craft Category')}
                   type="select"
@@ -600,22 +442,15 @@ export default function AddProduct({ addToast }) {
                 />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <div style={{ marginTop: '0.25rem' }}>
                 <Input 
-                  label={t('addProduct.sellingPriceLabel', 'Target Selling Price (₹)')}
+                  label={t('addProduct.materialCostLabel', 'Material Cost (₹) (Optional)')}
                   type="number"
-                  value={formData.price}
-                  onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                  badgeText={voiceFilled && formData.price ? (language === 'HI' ? '✨ वॉइस द्वारा भरा गया' : '✨ Voice Filled') : null}
-                  required
-                />
-
-                <Input 
-                  label={t('addProduct.materialCostLabel', 'Material Cost (₹)')}
-                  type="number"
+                  placeholder="e.g. 450"
                   value={formData.materialCost}
                   onChange={(e) => setFormData({ ...formData, materialCost: e.target.value })}
                   badgeText={voiceFilled && formData.materialCost ? (language === 'HI' ? '✨ वॉइस द्वारा भरा गया' : '✨ Voice Filled') : null}
+                  helpText={t('addProduct.costHelp', 'Optional — AI Studio will suggest optimal selling price and margin automatically.')}
                 />
               </div>
 
