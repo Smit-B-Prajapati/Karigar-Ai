@@ -1103,6 +1103,49 @@ export default function AddProduct({ addToast }) {
                   </div>
                 )}
               </div>
+
+              {/* Studio Cutout Pro-Tip & Retake Action */}
+              <div style={{
+                marginTop: '1rem',
+                padding: '0.85rem 1.1rem',
+                borderRadius: 'var(--radius-sm)',
+                background: 'rgba(255, 183, 3, 0.08)',
+                border: '1px solid rgba(255, 183, 3, 0.25)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '0.75rem',
+                fontSize: '0.84rem'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                  <Sparkles size={18} color="var(--accent-gold)" style={{ flexShrink: 0 }} />
+                  <span style={{ color: 'var(--text-secondary)' }}>
+                    {language === 'HI'
+                      ? '💡 सुझाव: बिना हाथ के 100% साफ उत्पाद कटआउट के लिए, शिल्प को किसी टेबल या समतल सतह पर रखकर फ़ोटो लें।'
+                      : '💡 Pro-Tip: For a 100% clean product-only cutout without hands, place your craft flat on a table or surface!'}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep(2)}
+                  style={{
+                    background: 'rgba(255,255,255,0.1)',
+                    border: '1px solid var(--border-color)',
+                    color: 'var(--text-primary)',
+                    padding: '0.35rem 0.75rem',
+                    borderRadius: 'var(--radius-sm)',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem'
+                  }}
+                >
+                  <Camera size={14} /> {language === 'HI' ? 'नयी फ़ोटो लें' : 'Retake on Surface'}
+                </button>
+              </div>
             </Card>
           </div>
 

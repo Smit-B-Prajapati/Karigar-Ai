@@ -378,6 +378,7 @@ export default function ImageUploader({
 
       {/* Main Upload Dropzone or Image Preview */}
       {!previewUrl ? (
+        <>
         <div
           onDrop={handleDrop}
           onDragOver={handleDragOver}
@@ -453,6 +454,36 @@ export default function ImageUploader({
             <span>Max size: 5 MB</span>
           </div>
         </div>
+
+        {/* Artisan Studio Photography Guide */}
+        <div
+          style={{
+            marginTop: '1rem',
+            padding: '0.85rem 1.1rem',
+            borderRadius: 'var(--radius-sm)',
+            background: 'rgba(255, 183, 3, 0.08)',
+            border: '1px solid rgba(255, 183, 3, 0.25)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.45rem',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 800, fontSize: '0.88rem', color: 'var(--accent-gold)' }}>
+            <Sparkles size={17} />
+            <span>📸 Pro-Tip for 100% Clean Studio Cutouts:</span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.5rem', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+              <span style={{ color: 'var(--success)', fontWeight: 800 }}>✓</span>
+              <span>Place craft flat on a <strong>table, desk, or surface</strong></span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+              <span style={{ color: 'var(--warning)', fontWeight: 800 }}>✗</span>
+              <span>Avoid holding in hands/palm so fingers aren't captured</span>
+            </div>
+          </div>
+        </div>
+      </>
       ) : (
         /* Image Preview & Management Card */
         <div

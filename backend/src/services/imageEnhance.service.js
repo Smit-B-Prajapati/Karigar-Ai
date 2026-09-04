@@ -18,19 +18,34 @@ async function callRemoveBgApi(base64Image, rawBuffer) {
     throw new Error('REMOVE_BG_API_KEY is not configured in backend/.env');
   }
 
-  const response = await fetch('https://api.remove.bg/v1.0/removebg', {
-    method: 'POST',
-    headers: {
-      'X-Api-Key': config.removeBgApiKey.trim(),
-      'Content-Type': 'application/json',
-      'Accept': 'application/json, image/png',
-    },
-    body: JSON.stringify({
-      image_file_b64: base64Image,
-      size: 'auto',
-      format: 'png', // Returns transparent PNG with background removed
-    }),
-  });
+  // Helper to send Remove.bg request with specified segmentation type
+  const sendRequest = async (segmentType) => {
+    return await fetch('https://api.remove.bg/v1.0/removebg', {
+      method: 'POST',
+      headers: {
+        'X-Api-Key': config.removeBgApiKey.trim(),
+        'Content-Type': 'application/json',
+        'Accept': 'application/json, image/png',
+      },
+      body: JSON.stringify({
+        image_file_b64: base64Image,
+        size: 'auto',
+        type: segmentType, // 'product' prioritizes craft/merchandise over hands/people
+        crop: true,
+        crop_margin: '20px',
+        format: 'png',
+      }),
+    });
+  };
+
+  // 1. First attempt with 'product' mode for optimal craft isolation
+  let response = await sendRequest('product');
+
+  // 2. If 'product' mode rejected with 400, retry with 'auto' mode
+  if (!response.ok && response.status === 400) {
+    console.warn('Remove.bg product mode returned 400, retrying with auto mode...');
+    response = await sendRequest('auto');
+  }
 
   if (!response.ok) {
     const errText = await response.text();
