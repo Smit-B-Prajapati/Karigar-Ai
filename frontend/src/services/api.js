@@ -1,5 +1,17 @@
 // Base API Client wrapper using standard fetch API
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+// Automatically fallback to relative /api when accessed via mobile phone or local network
+function getBaseApiUrl() {
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (typeof window !== 'undefined') {
+    const isMobileOrLan = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+    if (isMobileOrLan && envUrl && envUrl.includes('localhost')) {
+      return '/api';
+    }
+  }
+  return envUrl || '/api';
+}
+
+const API_BASE_URL = getBaseApiUrl();
 
 /**
  * Custom API request helper

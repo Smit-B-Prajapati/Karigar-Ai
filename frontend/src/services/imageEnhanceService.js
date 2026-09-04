@@ -9,8 +9,14 @@ export function resolveImageUrl(urlOrPath) {
   if (urlOrPath.startsWith('data:') || urlOrPath.startsWith('http://') || urlOrPath.startsWith('https://') || urlOrPath.startsWith('blob:')) {
     return urlOrPath;
   }
-  const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-  const serverOrigin = apiBase.replace(/\/api\/?$/, '');
+  let serverOrigin = '';
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (typeof window !== 'undefined') {
+    const isMobileOrLan = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+    if (!isMobileOrLan && envUrl && !envUrl.startsWith('/')) {
+      serverOrigin = envUrl.replace(/\/api\/?$/, '');
+    }
+  }
   return `${serverOrigin}${urlOrPath.startsWith('/') ? '' : '/'}${urlOrPath}`;
 }
 

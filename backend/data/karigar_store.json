@@ -5,7 +5,7 @@
       "name": "Rameshbhai Prajapati",
       "email": "ramesh@karigar.in",
       "phone": "9876543210",
-      "password": "$2b$10$mLE0EqetfisYTC4WX3fiCuRWbp2MZ/zbtzHWGOA07VuUzR1/CktHS",
+      "password": "$2b$10$8WZNzZp5dSb49OrFLV4X/es9viv5j.J2V80IJ2F/kDPdBwJCs6Doi",
       "preferredLanguage": "EN",
       "location": "Kutch, Gujarat",
       "storeName": "Mitti Karigar Handicrafts",
@@ -14,7 +14,7 @@
       "upiId": "ramesh.prajapati@upi",
       "avatar": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=250&q=80",
       "createdAt": "2026-09-04T07:03:26.895Z",
-      "updatedAt": "2026-09-04T07:39:14.499Z"
+      "updatedAt": "2026-09-04T08:09:24.906Z"
     },
     {
       "_id": "65d000000000000000000002",
@@ -171,6 +171,21 @@
       "upiId": "kavita@upi",
       "_id": "6a9a75a4f1546dfa2c4e0fdb",
       "createdAt": "2026-09-04T07:39:16.813Z",
+      "__v": 0
+    },
+    {
+      "name": "Mobile User Test",
+      "email": "mobile_1788510011830@test.com",
+      "password": "$2b$10$sDNopKL8hbjv983QX1BzZuu9.ZVH3wyczx6ejnH0BXn6kVNijmDRC",
+      "preferredLanguage": "EN",
+      "location": "Gujarat",
+      "avatar": "",
+      "storeName": "",
+      "craftType": "Indian Handicrafts & Textiles",
+      "experienceYears": 5,
+      "upiId": "",
+      "_id": "6a9a7f3bdce6cc94061022cb",
+      "createdAt": "2026-09-04T08:20:11.878Z",
       "__v": 0
     }
   ],
