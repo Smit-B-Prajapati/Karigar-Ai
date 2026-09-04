@@ -44,6 +44,16 @@ export async function apiRequest(endpoint, options = {}) {
   try {
     const response = await fetch(url, config);
     clearTimeout(timeoutId);
+
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      const text = await response.text().catch(() => '');
+      if (!response.ok) {
+        throw new Error(`Server returned HTTP ${response.status} (${response.statusText || 'Not Found'})`);
+      }
+      throw new Error(`API endpoint returned non-JSON response (${contentType || 'empty'})`);
+    }
+
     const data = await response.json();
     
     if (!response.ok) {

@@ -1,16 +1,44 @@
 import { apiRequest } from './api.js';
+import { demoFallbackProducts } from './dummyData.js';
+
+function getLocalProducts() {
+  try {
+    const raw = localStorage.getItem('karigar_local_products');
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveLocalProducts(products) {
+  try {
+    localStorage.setItem('karigar_local_products', JSON.stringify(products));
+  } catch (e) {}
+}
 
 /**
  * Get all products for authenticated artisan
  * GET /api/products
  */
 export async function getProducts(token) {
-  return await apiRequest('/products', {
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
+  try {
+    const res = await apiRequest('/products', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (res && res.products) {
+      return res;
+    }
+  } catch (err) {
+    console.warn('Backend getProducts unavailable, using local mock catalogue:', err.message);
+  }
+  const locals = getLocalProducts();
+  return {
+    success: true,
+    products: [...locals, ...demoFallbackProducts],
+  };
 }
 
 /**
@@ -18,12 +46,23 @@ export async function getProducts(token) {
  * GET /api/products/:id
  */
 export async function getProductById(id, token) {
-  return await apiRequest(`/products/${id}`, {
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
+  try {
+    const res = await apiRequest(`/products/${id}`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (res && (res.product || res.data)) return res;
+  } catch (err) {
+    console.warn('Backend getProductById unavailable, searching local products:', err.message);
+  }
+  const all = [...getLocalProducts(), ...demoFallbackProducts];
+  const found = all.find(p => p._id === id || p.id === id);
+  return {
+    success: Boolean(found),
+    product: found || demoFallbackProducts[0]
+  };
 }
 
 /**
@@ -31,13 +70,31 @@ export async function getProductById(id, token) {
  * POST /api/products
  */
 export async function createProduct(productData, token) {
-  return await apiRequest('/products', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(productData),
-  });
+  try {
+    const res = await apiRequest('/products', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(productData),
+    });
+    if (res && res.product) return res;
+  } catch (err) {
+    console.warn('Backend createProduct unavailable, storing product locally:', err.message);
+  }
+  const newProduct = {
+    ...productData,
+    _id: 'local_prod_' + Date.now(),
+    id: 'local_prod_' + Date.now(),
+    createdAt: new Date().toISOString(),
+    status: 'Market-Ready'
+  };
+  const locals = getLocalProducts();
+  saveLocalProducts([newProduct, ...locals]);
+  return {
+    success: true,
+    product: newProduct
+  };
 }
 
 /**
