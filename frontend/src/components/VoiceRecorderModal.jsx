@@ -99,18 +99,15 @@ export default function VoiceRecorderModal({
     audioChunksRef.current = [];
 
     const hasWebSpeech = isSpeechRecognitionSupported();
+    const hasMediaDevices = typeof navigator !== 'undefined' && 
+      Boolean(navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function');
 
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    let stream = null;
+    let startedSpeech = false;
 
-      timerRef.current = setInterval(() => {
-        setRecordingSeconds(prev => prev + 1);
-      }, 1000);
-
-      setUiState('recording');
-
-      // 1. Web Speech API Recognition
-      if (hasWebSpeech) {
+    // 1. Start Web Speech API Recognition if supported
+    if (hasWebSpeech) {
+      try {
         let accumulatedText = '';
         const recognizer = createSpeechRecognizer(selectedLanguage, {
           onStart: () => {
@@ -128,7 +125,11 @@ export default function VoiceRecorderModal({
           onError: (event) => {
             console.warn('[SpeechRecognition Event Error]:', event.error);
             if (event.error === 'not-allowed') {
-              handleRecordingError('Microphone permission denied. Please allow mic access in your browser settings.');
+              handleRecordingError(
+                language === 'HI'
+                  ? 'माइक्रोफ़ोन अनुमति अस्वीकृत। कृपया ब्राउज़र में माइक की अनुमति दें।'
+                  : 'Microphone permission was denied. Please allow microphone access in your browser settings.'
+              );
             }
           },
           onEnd: () => {
@@ -139,11 +140,17 @@ export default function VoiceRecorderModal({
         if (recognizer) {
           recognitionRef.current = recognizer;
           recognizer.start();
+          startedSpeech = true;
         }
+      } catch (speechErr) {
+        console.warn('Speech recognition init note:', speechErr);
       }
+    }
 
-      // 2. MediaRecorder for Audio Chunks
+    // 2. MediaRecorder for Audio Chunks (Only if mediaDevices is supported)
+    if (hasMediaDevices) {
       try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         const mediaRecorder = new MediaRecorder(stream);
         mediaRecorderRef.current = mediaRecorder;
         mediaRecorder.ondataavailable = (e) => {
@@ -153,20 +160,38 @@ export default function VoiceRecorderModal({
         };
         mediaRecorder.start();
       } catch (recErr) {
-        console.warn('MediaRecorder init warning:', recErr);
-      }
-
-    } catch (err) {
-      console.error('Microphone Access Error:', err);
-      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        handleRecordingError('Microphone permission was denied. Please allow microphone permissions in your browser or select a sample.');
-      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-        handleRecordingError('No microphone detected on your device. Auto-filling sample text instead.');
-        useFallbackSample();
-      } else {
-        handleRecordingError(err.message || 'Could not start audio recording.');
+        console.warn('MediaRecorder init note:', recErr);
       }
     }
+
+    // 3. Fallback notice if neither speech engine nor audio stream could start
+    if (!startedSpeech && !stream) {
+      const isMobileHttp = typeof window !== 'undefined' &&
+        window.location.protocol === 'http:' &&
+        window.location.hostname !== 'localhost' &&
+        window.location.hostname !== '127.0.0.1';
+
+      if (isMobileHttp) {
+        handleRecordingError(
+          language === 'HI'
+            ? 'मोबाइल ब्राउज़र में माइक के लिए HTTPS आवश्यक है। कृपया नीचे "नमूना ट्रांसक्रिप्ट लोड करें" का उपयोग करें, या Vercel (HTTPS) पर चलाएं।'
+            : 'Mobile browsers require a secure HTTPS connection to access the microphone. Please tap "Load Sample Voice Transcript" below to test, or deploy to Vercel (HTTPS) to speak live.'
+        );
+      } else {
+        handleRecordingError(
+          language === 'HI'
+            ? 'माइक्रोफ़ोन चालू नहीं हो सका। कृपया नमूना ट्रांसक्रिप्ट चुनें या विवरण टाइप करें।'
+            : 'Could not access microphone. Please load sample voice transcript or type craft description.'
+        );
+      }
+      return;
+    }
+
+    timerRef.current = setInterval(() => {
+      setRecordingSeconds(prev => prev + 1);
+    }, 1000);
+
+    setUiState('recording');
   };
 
   const useFallbackSample = async () => {
