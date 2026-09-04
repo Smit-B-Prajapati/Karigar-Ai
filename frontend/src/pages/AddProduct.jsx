@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Card from '../components/Card.jsx';
 import Input from '../components/Input.jsx';
@@ -12,6 +12,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { createProduct, uploadProductImage } from '../services/productService.js';
 import { analyzeImage } from '../services/aiService.js';
 import { enhancePhoto } from '../services/imageEnhanceService.js';
+import { optimizeImageForUpload } from '../utils/imageOptimizer.js';
 import { parseVoiceTranscript, sanitizeShortEnglishTitle } from '../services/voiceService.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import { mockCategories } from '../services/dummyData.js';
@@ -46,6 +47,8 @@ export default function AddProduct({ addToast }) {
   const [enhancedImage, setEnhancedImage] = useState('');
   const [enhancementError, setEnhancementError] = useState('');
   const [selectedImageChoice, setSelectedImageChoice] = useState('enhanced'); // 'enhanced' | 'original'
+  const [mobileStudioTab, setMobileStudioTab] = useState('enhanced'); // 'enhanced' | 'original' | 'both'
+  const studioPresentationRef = useRef(null);
 
   const [aiAnalysis, setAiAnalysis] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -56,9 +59,9 @@ export default function AddProduct({ addToast }) {
   // Voice details extractor handler
   const handleApplyVoiceData = (extracted) => {
     if (!extracted) return;
-    const cleanName = extracted.name
-      ? sanitizeShortEnglishTitle(extracted.name, extracted.category || formData.category, extracted.material || formData.material)
-      : formData.name;
+    const cleanName = extracted.name 
+      ? sanitizeShortEnglishTitle(extracted.name, extracted.category, extracted.material) 
+      : '';
 
     setFormData(prev => ({
       ...prev,
@@ -66,17 +69,20 @@ export default function AddProduct({ addToast }) {
       category: extracted.category || prev.category,
       material: extracted.material || prev.material,
       craftType: extracted.craftType || prev.craftType,
-      price: extracted.price ? String(extracted.price) : prev.price,
-      materialCost: extracted.materialCost ? String(extracted.materialCost) : prev.materialCost,
-      description: extracted.description || prev.description
+      price: extracted.price !== undefined && extracted.price !== null ? String(extracted.price) : prev.price,
+      materialCost: extracted.materialCost !== undefined && extracted.materialCost !== null ? String(extracted.materialCost) : prev.materialCost,
+      labourCost: extracted.labourCost !== undefined && extracted.labourCost !== null ? String(extracted.labourCost) : prev.labourCost,
+      description: extracted.description || prev.description,
     }));
     setVoiceFilled(true);
   };
 
-  // Quick Demo Voice triggers (English and Hindi only)
-  const handleTriggerVoiceDemo = async (sampleText, lang = 'hi-IN') => {
+  // Quick Demo Voice Parser
+  const handleDemoVoiceParse = async () => {
     setIsParsingDemo(true);
-    if (addToast) addToast(lang === 'hi-IN' ? 'वॉइस विश्लेषण और शिल्प विवरण निकाला जा रहा है...' : 'Parsing voice transcript & extracting craft details...', 'info');
+    const sampleText = 'यह हाथ से बनी पारंपरिक टेराकोटा चाय कुल्हड़ है जो प्राकृतिक मिट्टी से चाक पर बनाई गई है। इसकी सामग्री मिट्टी है और लागत 450 रुपये है और मैं इसे 750 रुपये में बेचना चाहता हूँ।';
+    const lang = 'hi-IN';
+
     try {
       const res = await parseVoiceTranscript(sampleText, lang, token);
       if (res && res.extracted) {
@@ -105,6 +111,7 @@ export default function AddProduct({ addToast }) {
     setEnhancementError('');
     setEnhancedImage('');
     setSelectedImageChoice('enhanced');
+    setMobileStudioTab('enhanced');
 
     // Advance to Step 3 Studio & Run Pipeline Automatically
     setCurrentStep(3);
@@ -117,46 +124,69 @@ export default function AddProduct({ addToast }) {
     setIsAnalyzing(true);
     setEnhancementError('');
     setPipelineStep(1); // 1: Uploading
-    setPipelineStatus('Uploading product image...');
+    setPipelineStatus(language === 'HI' ? 'फ़ोटो अनुकूलित और अपलोड की जा रही है...' : 'Optimizing and uploading product photo...');
+
+    let optimizedBase64 = imageInput;
+    try {
+      // Ensure image is downscaled to ~1200px / ~200KB for fast, reliable mobile processing
+      const optResult = await optimizeImageForUpload(imageInput, { maxDimension: 1200, quality: 0.85 });
+      optimizedBase64 = optResult.base64;
+    } catch (e) {
+      console.warn('Pre-pipeline optimization warning:', e);
+    }
 
     let enhancedResultUrl = '';
 
-    // Simulate smooth progress step transition
-    const stepTimer = setTimeout(() => {
-      setPipelineStep(2); // 2: Removing Background
-      setPipelineStatus('Removing background with AI...');
-    }, 600);
+    // Step 2: Background Removal
+    const step2Timer = setTimeout(() => {
+      setPipelineStep(2);
+      setPipelineStatus(language === 'HI' ? 'AI द्वारा बैकग्राउंड हटाया जा रहा है...' : 'Removing background & generating studio white backdrop...');
+    }, 450);
 
     // 1. Run Photo Enhancement
     try {
-      const enhanceRes = await enhancePhoto(imageInput, 'temp-prod', { preset: 'Studio Clean White' }, token);
-      clearTimeout(stepTimer);
+      const enhanceRes = await enhancePhoto(optimizedBase64, 'temp-prod', { preset: 'Studio Clean White' }, token);
+      clearTimeout(step2Timer);
       
       setPipelineStep(3); // 3: Enhancing Image
-      setPipelineStatus('Enhancing lighting, contrast & studio backdrop...');
+      setPipelineStatus(language === 'HI' ? 'स्टूडियो लाइटिंग और स्पष्टता बढ़ाई जा रही है...' : 'Enhancing studio lighting, clarity & contrast...');
 
       if (enhanceRes.success && (enhanceRes.enhancedImageUrl || enhanceRes.enhancedBase64)) {
         enhancedResultUrl = enhanceRes.enhancedBase64 || enhanceRes.enhancedImageUrl;
         setEnhancedImage(enhancedResultUrl);
         setSelectedImageChoice('enhanced');
+        setMobileStudioTab('enhanced');
         setPipelineStep(4); // 4: Completed
+        setPipelineStatus(language === 'HI' ? 'स्टूडियो संवर्धन पूर्ण!' : 'Studio Enhancement Complete!');
+
+        // Smooth scroll on mobile to the enhanced photo presentation
+        setTimeout(() => {
+          if (studioPresentationRef.current) {
+            studioPresentationRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          }
+        }, 200);
       } else {
         setEnhancementError(enhanceRes.message || 'Photo enhancement is temporarily unavailable.');
         setSelectedImageChoice('original');
+        setPipelineStep(4);
+        setPipelineStatus(language === 'HI' ? 'मूल फ़ोटो सुरक्षित' : 'Completed with original photo');
       }
     } catch (enhErr) {
-      console.warn('Studio photo enhancement failed/unavailable:', enhErr.message);
-      setEnhancementError('Photo enhancement is temporarily unavailable. Check REMOVE_BG_API_KEY in backend/.env.');
+      clearTimeout(step2Timer);
+      console.warn('Studio photo enhancement notice:', enhErr.message);
+      setEnhancementError(enhErr.message || 'Photo enhancement encountered an issue. Original photo preserved.');
       setSelectedImageChoice('original');
+      setPipelineStep(4);
+      setPipelineStatus(language === 'HI' ? 'मूल फ़ोटो सुरक्षित' : 'Completed with original photo');
     } finally {
       setIsEnhancing(false);
     }
 
     // 2. Run Multimodal AI Image Analysis
     try {
-      setPipelineStatus(enhancedResultUrl ? 'Analyzing craft attributes & material features...' : 'Completing analysis...');
+      setPipelineStatus(enhancedResultUrl ? (language === 'HI' ? 'शिल्प सामग्री और विशेषताओं का विश्लेषण...' : 'Analyzing craft attributes & material features...') : 'Completing analysis...');
       const analysisRes = await analyzeImage(
-        imageInput,
+        optimizedBase64,
         token,
         { name: formData.name, category: formData.category }
       );
@@ -182,7 +212,7 @@ export default function AddProduct({ addToast }) {
     } finally {
       setIsAnalyzing(false);
       setPipelineStep(4);
-      setPipelineStatus('Ready');
+      setPipelineStatus(language === 'HI' ? 'तैयार' : 'Ready');
     }
   };
 
@@ -740,242 +770,341 @@ export default function AddProduct({ addToast }) {
             </div>
           </Card>
 
-          {/* Photo Studio Side-by-Side Comparison */}
-          <Card
-            title={t('addProduct.studioPresentationTitle', 'Product Studio Presentation')}
-            subtitle={t('addProduct.studioPresentationSub', 'Compare original photo with AI Studio background removal & lighting')}
-          >
-            {enhancementError && (
-              <div style={{
-                padding: '0.9rem 1.1rem',
-                borderRadius: 'var(--radius-sm)',
-                background: 'rgba(245, 158, 11, 0.12)',
-                border: '1px solid rgba(245, 158, 11, 0.35)',
-                color: 'var(--warning)',
-                fontSize: '0.88rem',
-                marginBottom: '1.25rem',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                flexWrap: 'wrap',
-                gap: '0.75rem'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-                  <AlertTriangle size={20} />
-                  <div>
-                    <strong>{language === 'HI' ? 'फ़ोटो संवर्धन अस्थायी रूप से अनुपलब्ध है।' : 'Photo enhancement is temporarily unavailable.'}</strong>
-                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.15rem' }}>
-                      {language === 'HI' ? 'सटीक बैकग्राउंड हटाने के लिए backend/.env में REMOVE_BG_API_KEY जोड़ें। आप सुरक्षित रूप से मूल फ़ोटो के साथ आगे बढ़ सकते हैं।' : 'To enable high-accuracy background removal, add REMOVE_BG_API_KEY to backend/.env. You can safely continue with your original photo.'}
+          {/* Photo Studio Presentation with Mobile-Friendly View Switcher */}
+          <div ref={studioPresentationRef}>
+            <Card
+              title={t('addProduct.studioPresentationTitle', 'Product Studio Presentation')}
+              subtitle={t('addProduct.studioPresentationSub', 'Compare original photo with AI Studio background removal & lighting')}
+            >
+              {enhancementError && (
+                <div style={{
+                  padding: '0.9rem 1.1rem',
+                  borderRadius: 'var(--radius-sm)',
+                  background: 'rgba(245, 158, 11, 0.12)',
+                  border: '1px solid rgba(245, 158, 11, 0.35)',
+                  color: 'var(--warning)',
+                  fontSize: '0.88rem',
+                  marginBottom: '1.25rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: '0.75rem'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                    <AlertTriangle size={20} />
+                    <div>
+                      <strong>{language === 'HI' ? 'फ़ोटो संवर्धन सूचना' : 'Studio Enhancement Notice'}</strong>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.15rem' }}>
+                        {language === 'HI' ? 'स्टूडियो संवर्धन सुरक्षित रूप से मूल फ़ोटो के साथ आगे बढ़ सकता है।' : 'Original craft photography preserved. You can continue or retry enhancement below.'}
+                      </div>
                     </div>
                   </div>
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      onClick={() => runAutomaticStudioPipeline(formData.photoData || formData.photoFile)}
+                      style={{
+                        background: 'rgba(255,255,255,0.1)',
+                        border: '1px solid var(--border-color)',
+                        color: 'var(--text-primary)',
+                        padding: '0.4rem 0.85rem',
+                        borderRadius: 'var(--radius-sm)',
+                        fontSize: '0.82rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.4rem'
+                      }}
+                    >
+                      <RefreshCw size={14} /> {t('addProduct.retryEnhancementBtn', 'Retry Enhancement')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedImageChoice('original')}
+                      style={{
+                        background: 'var(--accent-terracotta)',
+                        border: 'none',
+                        color: '#fff',
+                        padding: '0.4rem 0.85rem',
+                        borderRadius: 'var(--radius-sm)',
+                        fontSize: '0.82rem',
+                        fontWeight: 700,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {t('addProduct.useOriginalBtn', 'Continue with Original Photo')}
+                    </button>
+                  </div>
                 </div>
-                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                  <button
-                    type="button"
-                    onClick={() => runAutomaticStudioPipeline(formData.photoData || formData.photoFile)}
-                    style={{
-                      background: 'rgba(255,255,255,0.1)',
-                      border: '1px solid var(--border-color)',
-                      color: 'var(--text-primary)',
-                      padding: '0.4rem 0.85rem',
-                      borderRadius: 'var(--radius-sm)',
-                      fontSize: '0.82rem',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.4rem'
-                    }}
-                  >
-                    <RefreshCw size={14} /> {t('addProduct.retryEnhancementBtn', 'Retry Enhancement')}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedImageChoice('original')}
-                    style={{
-                      background: 'var(--accent-terracotta)',
-                      border: 'none',
-                      color: '#fff',
-                      padding: '0.4rem 0.85rem',
-                      borderRadius: 'var(--radius-sm)',
-                      fontSize: '0.82rem',
-                      fontWeight: 700,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    {t('addProduct.useOriginalBtn', 'Continue with Original Photo')}
-                  </button>
-                </div>
-              </div>
-            )}
+              )}
 
-            {/* Two image boxes (Original | Enhanced) */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-              gap: '1.5rem',
-              marginBottom: '1.5rem'
-            }}>
-              
-              {/* Box 1: ORIGINAL PHOTO */}
+              {/* Mobile View Switcher Tabs */}
               <div style={{
-                border: selectedImageChoice === 'original' ? '2px solid var(--accent-terracotta)' : '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-md)',
-                padding: '0.75rem',
-                background: 'var(--bg-secondary)',
-                transition: 'all 0.2s ease',
                 display: 'flex',
-                flexDirection: 'column'
+                background: 'rgba(255, 255, 255, 0.05)',
+                padding: '4px',
+                borderRadius: 'var(--radius-sm)',
+                gap: '4px',
+                marginBottom: '1.25rem',
+                border: '1px solid var(--border-color)',
               }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
-                  <span style={{ fontSize: '0.82rem', fontWeight: 800, letterSpacing: '0.5px', color: 'var(--text-muted)' }}>
-                    {t('addProduct.originalBoxTitle', 'ORIGINAL PHOTO')}
-                  </span>
-                  {selectedImageChoice === 'original' && (
-                    <span style={{ fontSize: '0.72rem', background: 'var(--accent-terracotta)', color: '#fff', padding: '0.15rem 0.5rem', borderRadius: '4px', fontWeight: 800 }}>
-                      ✓ {language === 'HI' ? 'चयनित' : 'SELECTED'}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileStudioTab('enhanced');
+                    if (enhancedImage) setSelectedImageChoice('enhanced');
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: '0.55rem 0.65rem',
+                    borderRadius: 'var(--radius-sm)',
+                    border: 'none',
+                    background: mobileStudioTab === 'enhanced' ? 'var(--accent-gold)' : 'transparent',
+                    color: mobileStudioTab === 'enhanced' ? '#000' : 'var(--text-secondary)',
+                    fontWeight: mobileStudioTab === 'enhanced' ? 800 : 600,
+                    fontSize: '0.82rem',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.35rem',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  <Sparkles size={14} />
+                  <span>{language === 'HI' ? '✨ स्टूडियो संवर्धित' : '✨ Studio Enhanced'}</span>
+                  {enhancedImage && (
+                    <span style={{ fontSize: '0.65rem', background: '#000', color: 'var(--accent-gold)', padding: '1px 5px', borderRadius: '3px', fontWeight: 800 }}>
+                      ACTIVE
                     </span>
                   )}
-                </div>
+                </button>
 
-                <div style={{
-                  borderRadius: 'var(--radius-md)',
-                  overflow: 'hidden',
-                  border: '1px solid var(--border-color)',
-                  height: '280px',
-                  background: '#0a0d14',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}>
-                  <img
-                    src={formData.photoData}
-                    alt="Original Craft Photo"
-                    style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
-                  />
-                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileStudioTab('original');
+                    setSelectedImageChoice('original');
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: '0.55rem 0.65rem',
+                    borderRadius: 'var(--radius-sm)',
+                    border: 'none',
+                    background: mobileStudioTab === 'original' ? 'var(--accent-terracotta)' : 'transparent',
+                    color: mobileStudioTab === 'original' ? '#fff' : 'var(--text-secondary)',
+                    fontWeight: mobileStudioTab === 'original' ? 800 : 600,
+                    fontSize: '0.82rem',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.35rem',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  <Camera size={14} />
+                  <span>{language === 'HI' ? '📷 मूल फ़ोटो' : '📷 Original'}</span>
+                </button>
 
-                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedImageChoice('original')}
-                    style={{
-                      flex: 1,
-                      padding: '0.6rem',
-                      borderRadius: 'var(--radius-sm)',
-                      border: selectedImageChoice === 'original' ? '1px solid var(--accent-terracotta)' : '1px solid var(--border-color)',
-                      background: selectedImageChoice === 'original' ? 'rgba(230,81,0,0.2)' : 'rgba(255,255,255,0.04)',
-                      color: selectedImageChoice === 'original' ? 'var(--accent-terracotta)' : 'var(--text-primary)',
-                      fontWeight: 700,
-                      fontSize: '0.85rem',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s'
-                    }}
-                  >
-                    {selectedImageChoice === 'original' ? (language === 'HI' ? '✓ मूल फ़ोटो चयनित' : '✓ Using Original') : t('addProduct.useOriginalBtn', 'Use Original')}
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setMobileStudioTab('both')}
+                  style={{
+                    flex: 1,
+                    padding: '0.55rem 0.65rem',
+                    borderRadius: 'var(--radius-sm)',
+                    border: 'none',
+                    background: mobileStudioTab === 'both' ? 'rgba(255,255,255,0.18)' : 'transparent',
+                    color: mobileStudioTab === 'both' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                    fontWeight: mobileStudioTab === 'both' ? 800 : 600,
+                    fontSize: '0.82rem',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.35rem',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  <Layers size={14} />
+                  <span>{language === 'HI' ? '⇄ दोनों तुलना' : '⇄ Compare'}</span>
+                </button>
               </div>
 
-              {/* Box 2: STUDIO ENHANCED (PURE WHITE BACKDROP) */}
+              {/* Image Presentation Grid */}
               <div style={{
-                border: selectedImageChoice === 'enhanced' ? '2px solid var(--accent-gold)' : '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-md)',
-                padding: '0.75rem',
-                background: 'var(--bg-secondary)',
-                transition: 'all 0.2s ease',
-                display: 'flex',
-                flexDirection: 'column'
+                display: 'grid',
+                gridTemplateColumns: mobileStudioTab === 'both' ? 'repeat(auto-fit, minmax(280px, 1fr))' : '1fr',
+                gap: '1.5rem',
+                marginBottom: '1.5rem'
               }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
-                  <span style={{ fontSize: '0.82rem', fontWeight: 800, letterSpacing: '0.5px', color: 'var(--accent-gold)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                    <Sparkles size={14} /> {t('addProduct.enhancedBoxTitle', 'AFTER (ENHANCED - WHITE BACKDROP)')}
-                  </span>
-                  {selectedImageChoice === 'enhanced' && enhancedImage && (
-                    <span style={{ fontSize: '0.72rem', background: 'var(--accent-gold)', color: '#000', padding: '0.15rem 0.5rem', borderRadius: '4px', fontWeight: 900 }}>
-                      ✓ {language === 'HI' ? 'सक्रिय पसंद' : 'ACTIVE CHOICE'}
-                    </span>
-                  )}
-                </div>
-
-                <div style={{
-                  borderRadius: 'var(--radius-md)',
-                  overflow: 'hidden',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  height: '280px',
-                  background: '#FFFFFF',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  position: 'relative'
-                }}>
-                  {isEnhancing ? (
-                    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#444', padding: '1.5rem', textAlign: 'center' }}>
-                      <div className="spinner" style={{ width: '40px', height: '40px', color: 'var(--accent-terracotta)', marginBottom: '1rem' }} />
-                      <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#111' }}>{pipelineStatus}</span>
-                      <span style={{ fontSize: '0.78rem', color: '#666', marginTop: '0.3rem' }}>{language === 'HI' ? 'सफेद बैकग्राउंड और स्टूडियो लाइटिंग लागू की जा रही है...' : 'Applying clean white background & lighting...'}</span>
+                
+                {/* Box 1: ORIGINAL PHOTO */}
+                {(mobileStudioTab === 'original' || mobileStudioTab === 'both') && (
+                  <div style={{
+                    border: selectedImageChoice === 'original' ? '2px solid var(--accent-terracotta)' : '1px solid var(--border-color)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '0.75rem',
+                    background: 'var(--bg-secondary)',
+                    transition: 'all 0.2s ease',
+                    display: 'flex',
+                    flexDirection: 'column'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
+                      <span style={{ fontSize: '0.82rem', fontWeight: 800, letterSpacing: '0.5px', color: 'var(--text-muted)' }}>
+                        {t('addProduct.originalBoxTitle', 'ORIGINAL PHOTO')}
+                      </span>
+                      {selectedImageChoice === 'original' && (
+                        <span style={{ fontSize: '0.72rem', background: 'var(--accent-terracotta)', color: '#fff', padding: '0.15rem 0.5rem', borderRadius: '4px', fontWeight: 800 }}>
+                          ✓ {language === 'HI' ? 'चयनित' : 'SELECTED'}
+                        </span>
+                      )}
                     </div>
-                  ) : enhancedImage ? (
-                    <img
-                      src={enhancedImage}
-                      alt="Studio White Product Preview"
-                      style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', padding: '8px' }}
-                    />
-                  ) : (
-                    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#888', padding: '1rem', textAlign: 'center' }}>
-                      <ImageIcon size={36} color="#bbb" style={{ marginBottom: '0.5rem' }} />
-                      <span style={{ fontSize: '0.85rem', color: '#666' }}>{language === 'HI' ? 'संवर्धित स्टूडियो फ़ोटो यहाँ दिखाई देगी' : 'Enhanced studio image will appear here'}</span>
-                    </div>
-                  )}
-                </div>
 
-                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
-                  <button
-                    type="button"
-                    disabled={!enhancedImage || isEnhancing}
-                    onClick={() => setSelectedImageChoice('enhanced')}
-                    style={{
-                      flex: 1,
-                      padding: '0.6rem',
-                      borderRadius: 'var(--radius-sm)',
-                      border: '1px solid var(--accent-gold)',
-                      background: selectedImageChoice === 'enhanced' && enhancedImage ? 'var(--accent-gold)' : 'rgba(255,183,3,0.12)',
-                      color: selectedImageChoice === 'enhanced' && enhancedImage ? '#000' : 'var(--accent-gold)',
-                      fontWeight: 800,
-                      fontSize: '0.85rem',
-                      cursor: !enhancedImage || isEnhancing ? 'not-allowed' : 'pointer',
-                      opacity: !enhancedImage ? 0.6 : 1,
-                      transition: 'all 0.2s'
-                    }}
-                  >
-                    {selectedImageChoice === 'enhanced' && enhancedImage ? (language === 'HI' ? '✓ संवर्धित फ़ोटो चयनित' : '✓ Using Enhanced') : t('addProduct.useEnhancedBtn', 'Use Enhanced')}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => runAutomaticStudioPipeline(formData.photoData || formData.photoFile)}
-                    style={{
-                      padding: '0.6rem 0.85rem',
-                      borderRadius: 'var(--radius-sm)',
+                    <div style={{
+                      borderRadius: 'var(--radius-md)',
+                      overflow: 'hidden',
                       border: '1px solid var(--border-color)',
-                      background: 'rgba(255,255,255,0.05)',
-                      color: 'var(--text-primary)',
-                      fontWeight: 700,
-                      fontSize: '0.82rem',
-                      cursor: 'pointer',
+                      height: '280px',
+                      background: '#0a0d14',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '0.35rem'
-                    }}
-                    title="Retry photo enhancement"
-                  >
-                    <RefreshCw size={14} /> {t('addProduct.retryEnhancementBtn', 'Retry')}
-                  </button>
-                </div>
-              </div>
+                      justifyContent: 'center'
+                    }}>
+                      <img
+                        src={formData.photoData}
+                        alt="Original Craft Photo"
+                        style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                      />
+                    </div>
 
-            </div>
-          </Card>
+                    <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedImageChoice('original')}
+                        style={{
+                          flex: 1,
+                          padding: '0.6rem',
+                          borderRadius: 'var(--radius-sm)',
+                          border: selectedImageChoice === 'original' ? '1px solid var(--accent-terracotta)' : '1px solid var(--border-color)',
+                          background: selectedImageChoice === 'original' ? 'rgba(230,81,0,0.2)' : 'rgba(255,255,255,0.04)',
+                          color: selectedImageChoice === 'original' ? 'var(--accent-terracotta)' : 'var(--text-primary)',
+                          fontWeight: 700,
+                          fontSize: '0.85rem',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s'
+                        }}
+                      >
+                        {selectedImageChoice === 'original' ? (language === 'HI' ? '✓ मूल फ़ोटो चयनित' : '✓ Using Original') : t('addProduct.useOriginalBtn', 'Use Original')}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Box 2: STUDIO ENHANCED (PURE WHITE BACKDROP) */}
+                {(mobileStudioTab === 'enhanced' || mobileStudioTab === 'both') && (
+                  <div style={{
+                    border: selectedImageChoice === 'enhanced' ? '2px solid var(--accent-gold)' : '1px solid var(--border-color)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '0.75rem',
+                    background: 'var(--bg-secondary)',
+                    transition: 'all 0.2s ease',
+                    display: 'flex',
+                    flexDirection: 'column'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
+                      <span style={{ fontSize: '0.82rem', fontWeight: 800, letterSpacing: '0.5px', color: 'var(--accent-gold)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                        <Sparkles size={14} /> {t('addProduct.enhancedBoxTitle', 'AFTER (ENHANCED - WHITE BACKDROP)')}
+                      </span>
+                      {selectedImageChoice === 'enhanced' && enhancedImage && (
+                        <span style={{ fontSize: '0.72rem', background: 'var(--accent-gold)', color: '#000', padding: '0.15rem 0.5rem', borderRadius: '4px', fontWeight: 900 }}>
+                          ✓ {language === 'HI' ? 'सक्रिय पसंद' : 'ACTIVE CHOICE'}
+                        </span>
+                      )}
+                    </div>
+
+                    <div style={{
+                      borderRadius: 'var(--radius-md)',
+                      overflow: 'hidden',
+                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                      height: '280px',
+                      background: '#FFFFFF',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      position: 'relative'
+                    }}>
+                      {isEnhancing ? (
+                        <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#444', padding: '1.5rem', textAlign: 'center' }}>
+                          <div className="spinner" style={{ width: '40px', height: '40px', color: 'var(--accent-terracotta)', marginBottom: '1rem' }} />
+                          <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#111' }}>{pipelineStatus}</span>
+                          <span style={{ fontSize: '0.78rem', color: '#666', marginTop: '0.3rem' }}>{language === 'HI' ? 'सफेद बैकग्राउंड और स्टूडियो लाइटिंग लागू की जा रही है...' : 'Applying clean white background & lighting...'}</span>
+                        </div>
+                      ) : enhancedImage ? (
+                        <img
+                          src={enhancedImage}
+                          alt="Studio White Product Preview"
+                          style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', padding: '8px' }}
+                        />
+                      ) : (
+                        <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#888', padding: '1rem', textAlign: 'center' }}>
+                          <ImageIcon size={36} color="#bbb" style={{ marginBottom: '0.5rem' }} />
+                          <span style={{ fontSize: '0.85rem', color: '#666' }}>{language === 'HI' ? 'संवर्धित स्टूडियो फ़ोटो यहाँ दिखाई देगी' : 'Enhanced studio image will appear here'}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
+                      <button
+                        type="button"
+                        disabled={!enhancedImage || isEnhancing}
+                        onClick={() => setSelectedImageChoice('enhanced')}
+                        style={{
+                          flex: 1,
+                          padding: '0.6rem',
+                          borderRadius: 'var(--radius-sm)',
+                          border: '1px solid var(--accent-gold)',
+                          background: selectedImageChoice === 'enhanced' && enhancedImage ? 'var(--accent-gold)' : 'rgba(255,183,3,0.12)',
+                          color: selectedImageChoice === 'enhanced' && enhancedImage ? '#000' : 'var(--accent-gold)',
+                          fontWeight: 800,
+                          fontSize: '0.85rem',
+                          cursor: !enhancedImage || isEnhancing ? 'not-allowed' : 'pointer',
+                          opacity: !enhancedImage ? 0.6 : 1,
+                          transition: 'all 0.2s'
+                        }}
+                      >
+                        {selectedImageChoice === 'enhanced' && enhancedImage ? (language === 'HI' ? '✓ संवर्धित फ़ोटो चयनित' : '✓ Using Enhanced') : t('addProduct.useEnhancedBtn', 'Use Enhanced')}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => runAutomaticStudioPipeline(formData.photoData || formData.photoFile)}
+                        style={{
+                          padding: '0.6rem 0.85rem',
+                          borderRadius: 'var(--radius-sm)',
+                          border: '1px solid var(--border-color)',
+                          background: 'rgba(255,255,255,0.05)',
+                          color: 'var(--text-primary)',
+                          fontWeight: 700,
+                          fontSize: '0.82rem',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.35rem'
+                        }}
+                        title="Retry photo enhancement"
+                      >
+                        <RefreshCw size={14} /> {t('addProduct.retryEnhancementBtn', 'Retry')}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </Card>
+          </div>
 
           {/* AI Image Analysis Detected Attributes */}
           <Card title={t('addProduct.detectedAttributesTitle', 'Detected AI Craft Attributes')} subtitle={t('addProduct.detectedAttributesSub', 'Automatic visual observations. All detected attributes are fully editable.')}>

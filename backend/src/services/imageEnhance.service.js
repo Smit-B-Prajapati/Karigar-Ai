@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import sharp from 'sharp';
+import mongoose from 'mongoose';
 import Product from '../models/product.model.js';
 import { extractImageBuffer } from './ai.service.js';
 
@@ -91,13 +92,15 @@ async function callClipdropApi(rawBuffer) {
  */
 async function smartStudioLocalEnhance(inputBuffer) {
   try {
-    // 1. Read metadata
-    const metadata = await sharp(inputBuffer).metadata();
+    // 1. Read metadata with auto-rotation for mobile portrait/landscape photos
+    const oriented = sharp(inputBuffer).rotate();
+    const metadata = await oriented.metadata();
     const width = metadata.width || 800;
     const height = metadata.height || 800;
 
     // 2. Normalize, boost vibrance, and sharpen craft item
     const enhancedSubject = await sharp(inputBuffer)
+      .rotate()
       .resize(840, 840, { 
         fit: 'inside', 
         withoutEnlargement: false,
@@ -130,7 +133,7 @@ async function smartStudioLocalEnhance(inputBuffer) {
         },
       ])
       .jpeg({
-        quality: 95,
+        quality: 92,
         progressive: true,
       })
       .toBuffer();
@@ -140,6 +143,7 @@ async function smartStudioLocalEnhance(inputBuffer) {
     console.error('smartStudioLocalEnhance error:', err.message);
     // Safe direct output
     return await sharp(inputBuffer)
+      .rotate()
       .resize(1000, 1000, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 1 } })
       .jpeg({ quality: 90 })
       .toBuffer();
@@ -310,7 +314,7 @@ export async function enhanceProductPhoto(imageInput, productId = 'temp', option
   const enhancedBase64 = `data:image/jpeg;base64,${finalCompositeBuffer.toString('base64')}`;
 
   // 7. Update Product model in MongoDB if productId is valid
-  if (productId && productId !== 'temp' && !productId.startsWith('temp')) {
+  if (productId && mongoose.Types.ObjectId.isValid(productId)) {
     try {
       const productDoc = await Product.findById(productId);
       if (productDoc) {

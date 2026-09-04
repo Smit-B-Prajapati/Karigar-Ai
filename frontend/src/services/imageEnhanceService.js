@@ -1,5 +1,6 @@
 import { apiRequest } from './api.js';
 import { fileToBase64 } from './productService.js';
+import { optimizeImageForUpload } from '../utils/imageOptimizer.js';
 
 /**
  * Resolve relative image URL (like /uploads/products/xyz.jpg) to full server URL
@@ -29,9 +30,17 @@ export function resolveImageUrl(urlOrPath) {
  */
 export async function enhanceRawImage(imageInput, token = null, options = {}) {
   let imagePayload = imageInput;
-  if (imageInput instanceof File || imageInput instanceof Blob) {
-    const converted = await fileToBase64(imageInput);
-    imagePayload = converted.image;
+
+  // Always optimize image client-side to ensure rapid mobile transmission (<300KB)
+  try {
+    const optimized = await optimizeImageForUpload(imageInput, { maxDimension: 1200, quality: 0.85 });
+    imagePayload = optimized.base64;
+  } catch (optErr) {
+    console.warn('Pre-upload optimization skipped/fallback:', optErr);
+    if (imageInput instanceof File || imageInput instanceof Blob) {
+      const converted = await fileToBase64(imageInput);
+      imagePayload = converted.image;
+    }
   }
 
   try {

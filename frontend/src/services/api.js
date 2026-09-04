@@ -26,8 +26,15 @@ export async function apiRequest(endpoint, options = {}) {
     'Accept': 'application/json',
   };
 
+  const timeoutMs = options.timeout || 35000;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    controller.abort();
+  }, timeoutMs);
+
   const config = {
     ...options,
+    signal: options.signal || controller.signal,
     headers: {
       ...defaultHeaders,
       ...options.headers,
@@ -36,6 +43,7 @@ export async function apiRequest(endpoint, options = {}) {
 
   try {
     const response = await fetch(url, config);
+    clearTimeout(timeoutId);
     const data = await response.json();
     
     if (!response.ok) {
@@ -44,6 +52,10 @@ export async function apiRequest(endpoint, options = {}) {
     
     return data;
   } catch (error) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error(`Request timed out after ${Math.round(timeoutMs / 1000)}s. Please check network connection.`);
+    }
     console.error(`[API Error] Request failed for ${endpoint}:`, error);
     throw error;
   }
