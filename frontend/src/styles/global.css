@@ -217,13 +217,18 @@ a {
   left: 0;
   right: 0;
   z-index: 1000;
-  background: rgba(252, 248, 242, 0.96);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border-top: 1px solid var(--border-color);
+  box-shadow: 0 -3px 16px rgba(70, 45, 80, 0.08);
   display: flex;
+  align-items: flex-end;
   justify-content: space-around;
-  padding: 0.4rem 0.2rem 0.6rem 0.2rem;
+  padding: 0.3rem 0.4rem;
+  padding-bottom: max(0.45rem, env(safe-area-inset-bottom, 0px));
+  height: 60px;
+  box-sizing: border-box;
 }
 
 @media (min-width: 768px) {
@@ -236,26 +241,106 @@ a {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-end;
   flex: 1;
-  min-height: 48px;
+  height: 100%;
   color: var(--text-muted);
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 600;
-  gap: 0.25rem;
+  gap: 0.2rem;
+  text-decoration: none;
   transition: var(--transition-smooth);
   border: none;
   background: transparent;
   cursor: pointer;
+  padding-bottom: 0.25rem;
+  white-space: nowrap;
+}
+
+.bottom-tab .bottom-tab-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  transition: transform 0.2s ease;
+}
+
+.bottom-tab span {
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.15px;
+  white-space: nowrap;
+  transition: color 0.2s ease;
 }
 
 .bottom-tab.active {
-  color: var(--accent-primary);
+  color: var(--accent-terracotta);
 }
 
-.bottom-tab.active svg {
+.bottom-tab.active .bottom-tab-icon-wrap {
   transform: translateY(-2px);
-  color: var(--accent-primary);
+}
+
+.bottom-tab.active .bottom-tab-icon-wrap svg {
+  color: var(--accent-terracotta);
+}
+
+.bottom-tab.active span {
+  color: var(--accent-terracotta);
+  font-weight: 800;
+}
+
+/* Standout Featured AI Studio Center Tab */
+.bottom-tab-hero {
+  position: relative;
+  flex: 1.15;
+  padding-bottom: 0.25rem;
+}
+
+.bottom-tab-hero .bottom-tab-hero-bubble {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(184, 134, 155, 0.22) 0%, rgba(246, 196, 146, 0.35) 100%);
+  border: 1.5px solid rgba(184, 134, 155, 0.45);
+  box-shadow: 0 3px 10px rgba(184, 134, 155, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-gold);
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  margin-bottom: 0.15rem;
+  margin-top: -12px;
+}
+
+.bottom-tab-hero:active .bottom-tab-hero-bubble {
+  transform: scale(0.92);
+}
+
+.bottom-tab-hero.active .bottom-tab-hero-bubble {
+  background: linear-gradient(135deg, #b8869b 0%, #e07a5f 100%);
+  border-color: #ffffff;
+  box-shadow: 0 4px 14px rgba(224, 122, 95, 0.45);
+  color: #ffffff;
+  transform: translateY(-3px) scale(1.04);
+}
+
+.bottom-tab-hero.active .bottom-tab-hero-bubble svg {
+  color: #ffffff !important;
+}
+
+.bottom-tab-hero .bottom-tab-hero-label {
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: var(--accent-gold);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.bottom-tab-hero.active .bottom-tab-hero-label {
+  color: var(--accent-terracotta);
+  font-weight: 900;
 }
 
 
