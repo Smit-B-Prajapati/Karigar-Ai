@@ -171,7 +171,7 @@ export default function Pricing({ addToast }) {
       };
 
       const res = await calculateSmartPricing(payload, token);
-      if (res.success && res.pricingRecommendation) {
+      if (res.success && (res.pricing || res.pricingRecommendation)) {
         setPricingData(res);
       }
     } catch (err) {
@@ -196,7 +196,7 @@ export default function Pricing({ addToast }) {
   const handleApplyPriceToProduct = async (customFinalPrice) => {
     if (!pricingData) return;
 
-    const priceToApply = customFinalPrice || pricingData.pricingRecommendation.recommendedPrice;
+    const priceToApply = customFinalPrice || (pricingData.pricing || pricingData.pricingRecommendation)?.recommendedPrice;
 
     if (!currentProduct || !currentProduct._id || currentProduct._id.startsWith('mock')) {
       if (addToast) addToast(`Final Selling Price ₹${priceToApply} saved to preview!`, 'success');

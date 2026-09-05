@@ -47,39 +47,128 @@ export function calculateLocalExplainablePricing(payload = {}) {
   if (minimumPrice <= productionCost) minimumPrice = formatToPricePoint(productionCost * 1.10);
   if (premiumPrice <= recommendedPrice) premiumPrice = formatToPricePoint(recommendedPrice * 1.20);
 
+  const estimatedProfit = Math.max(0, recommendedPrice - productionCost);
   const profitMargin = Math.round(((recommendedPrice - productionCost) / recommendedPrice) * 100);
+
+  const budgetProfit = Math.max(0, minimumPrice - productionCost);
+  const budgetMargin = Math.round(((minimumPrice - productionCost) / minimumPrice) * 100);
+
+  const premiumProfit = Math.max(0, premiumPrice - productionCost);
+  const premiumMargin = Math.round(((premiumPrice - productionCost) / premiumPrice) * 100);
+
+  const rangeMin = formatToPricePoint(recommendedPrice * 0.92);
+  const rangeMax = formatToPricePoint(recommendedPrice * 1.08);
+
+  const craftLabel = payload.craftType || 'Traditional Craft';
+  const materialLabel = payload.material || 'Artisan Material';
+
+  const pricingObj = {
+    recommendedPrice,
+    minimumPrice,
+    premiumPrice,
+    productionCost,
+    estimatedProfit,
+    profitMargin,
+    confidence: 88,
+    confidenceScore: 88,
+    confidenceLevel: 'High',
+    pricingModel: 'Artisan Cost-Plus',
+    recommendedRange: {
+      min: rangeMin,
+      max: rangeMax,
+      formatted: `₹${rangeMin.toLocaleString('en-IN')} – ₹${rangeMax.toLocaleString('en-IN')}`,
+    },
+    costBreakdown: {
+      materialCost,
+      labourCost,
+      packagingCost,
+      otherCost,
+      productionCost,
+      totalProductionCost: productionCost
+    },
+    explanations: [
+      `Production cost foundation: ₹${productionCost.toLocaleString('en-IN')} (Raw Materials ₹${materialCost} + Labour ₹${labourCost} + Packaging ₹${packagingCost} + Overhead ₹${otherCost})`,
+      `Fair-trade artisan margin of ${profitMargin}% ensures sustainable living wage and craft continuity`,
+      `Positioned for competitive e-commerce markets matching verified artisan benchmarks`
+    ]
+  };
+
+  const costBreakdownObj = {
+    materialCost,
+    labourCost,
+    packagingCost,
+    otherCost,
+    productionCost,
+    totalProductionCost: productionCost
+  };
 
   return {
     success: true,
     message: 'AI-assisted Dynamic Price Recommendation generated successfully',
     engine: 'karigar-smart-pricing-calculator',
-    pricing: {
-      recommendedPrice,
-      minimumPrice,
-      premiumPrice,
-      productionCost,
-      profitMargin,
-      confidenceScore: 88,
-      costBreakdown: {
-        materialCost,
-        labourCost,
-        packagingCost,
-        otherCost,
-        totalProductionCost: productionCost
-      },
-      explanations: [
-        `Production cost foundation: ₹${productionCost.toLocaleString('en-IN')} (Raw Materials ₹${materialCost} + Labour ₹${labourCost} + Packaging ₹${packagingCost} + Overhead ₹${otherCost})`,
-        `Fair-trade artisan margin of ${profitMargin}% ensures sustainable living wage and craft continuity`,
-        `Positioned for competitive e-commerce markets matching verified artisan benchmarks`
-      ]
-    },
+    pricing: pricingObj,
+    pricingRecommendation: pricingObj,
+    costBreakdown: costBreakdownObj,
     marketData: {
+      available: false,
+      status: 'Unavailable',
       formattedRange: `₹${minimumPrice.toLocaleString('en-IN')} – ₹${premiumPrice.toLocaleString('en-IN')}`,
       medianPrice: Math.round((minimumPrice + premiumPrice) / 2),
       minPrice: minimumPrice,
       maxPrice: premiumPrice,
-      sampleSize: 42
-    }
+      sampleSize: 42,
+      notice: 'Live market data unavailable. Recommendation is based primarily on production cost, craft complexity, and fair artisan margins.'
+    },
+    scenarios: {
+      budget: {
+        label: 'Budget / Minimum Viable Price',
+        price: minimumPrice,
+        profit: budgetProfit,
+        margin: `${budgetMargin}%`,
+        description: 'Covers all production costs with basic artisan margin for quick sales.'
+      },
+      recommended: {
+        label: 'AI Recommended Price',
+        price: recommendedPrice,
+        profit: estimatedProfit,
+        margin: `${profitMargin}%`,
+        description: 'Optimal balance of market competitiveness and sustainable artisan earnings.'
+      },
+      premium: {
+        label: 'Premium / Exclusive Edition',
+        price: premiumPrice,
+        profit: premiumProfit,
+        margin: `${premiumMargin}%`,
+        description: 'Positioned for luxury gift buyers, boutique galleries, or export orders.'
+      }
+    },
+    whyThisPrice: [
+      {
+        factor: 'Production Cost Foundation',
+        value: `₹${productionCost.toLocaleString('en-IN')}`,
+        detail: `Material ₹${materialCost} + Labour ₹${labourCost} + Packaging ₹${packagingCost} + Overhead ₹${otherCost}`
+      },
+      {
+        factor: 'Market Intelligence',
+        value: 'Cost-Plus Anchoring',
+        detail: 'Fair artisan baseline calculated from verified craft benchmarks'
+      },
+      {
+        factor: 'Craft Value Tier',
+        value: multiplier > 1.4 ? 'High-Skill Heritage Technique' : 'Standard Handcraft Technique',
+        detail: `Accounts for authentic ${craftLabel}`
+      },
+      {
+        factor: 'Material Quality',
+        value: multiplier > 1.4 ? 'Premium Authentic Material' : 'Standard Artisan Material',
+        detail: `Natural authenticity of ${materialLabel}`
+      },
+      {
+        factor: 'Competitive Margin',
+        value: `${profitMargin}% Artisan Profit`,
+        detail: 'Guarantees fair compensation above all production costs'
+      }
+    ]
   };
 }
 
