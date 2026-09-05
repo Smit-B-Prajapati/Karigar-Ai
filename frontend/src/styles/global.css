@@ -221,13 +221,13 @@ a {
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-top: 1px solid var(--border-color);
-  box-shadow: 0 -3px 16px rgba(70, 45, 80, 0.08);
+  box-shadow: 0 -2px 14px rgba(70, 45, 80, 0.06);
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-around;
-  padding: 0.3rem 0.4rem;
-  padding-bottom: max(0.45rem, env(safe-area-inset-bottom, 0px));
-  height: 60px;
+  padding: 0.3rem 0.25rem;
+  padding-bottom: max(0.35rem, env(safe-area-inset-bottom, 0px));
+  height: 58px;
   box-sizing: border-box;
 }
 
@@ -241,7 +241,7 @@ a {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: center;
   flex: 1;
   height: 100%;
   color: var(--text-muted);
@@ -253,7 +253,7 @@ a {
   border: none;
   background: transparent;
   cursor: pointer;
-  padding-bottom: 0.25rem;
+  padding: 0.2rem 0;
   white-space: nowrap;
 }
 
@@ -261,8 +261,10 @@ a {
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 32px;
   height: 24px;
-  transition: transform 0.2s ease;
+  border-radius: var(--radius-sm);
+  transition: transform 0.2s ease, background 0.2s ease;
 }
 
 .bottom-tab span {
@@ -279,7 +281,7 @@ a {
 }
 
 .bottom-tab.active .bottom-tab-icon-wrap {
-  transform: translateY(-2px);
+  transform: translateY(-1px);
 }
 
 .bottom-tab.active .bottom-tab-icon-wrap svg {
@@ -291,54 +293,35 @@ a {
   font-weight: 800;
 }
 
-/* Standout Featured AI Studio Center Tab */
-.bottom-tab-hero {
-  position: relative;
-  flex: 1.15;
-  padding-bottom: 0.25rem;
-}
-
-.bottom-tab-hero .bottom-tab-hero-bubble {
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, rgba(184, 134, 155, 0.22) 0%, rgba(246, 196, 146, 0.35) 100%);
-  border: 1.5px solid rgba(184, 134, 155, 0.45);
-  box-shadow: 0 3px 10px rgba(184, 134, 155, 0.25);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+/* AI Studio Center Button - Seamlessly Inline & Elegant */
+.bottom-tab.bottom-tab-special {
   color: var(--accent-gold);
-  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-  margin-bottom: 0.15rem;
-  margin-top: -12px;
 }
 
-.bottom-tab-hero:active .bottom-tab-hero-bubble {
-  transform: scale(0.92);
-}
-
-.bottom-tab-hero.active .bottom-tab-hero-bubble {
-  background: linear-gradient(135deg, #b8869b 0%, #e07a5f 100%);
-  border-color: #ffffff;
-  box-shadow: 0 4px 14px rgba(224, 122, 95, 0.45);
-  color: #ffffff;
-  transform: translateY(-3px) scale(1.04);
-}
-
-.bottom-tab-hero.active .bottom-tab-hero-bubble svg {
-  color: #ffffff !important;
-}
-
-.bottom-tab-hero .bottom-tab-hero-label {
-  font-size: 0.68rem;
-  font-weight: 800;
+.bottom-tab.bottom-tab-special .bottom-tab-icon-wrap svg {
   color: var(--accent-gold);
-  line-height: 1;
-  white-space: nowrap;
 }
 
-.bottom-tab-hero.active .bottom-tab-hero-label {
+.bottom-tab.bottom-tab-special span {
+  color: var(--accent-gold);
+  font-weight: 700;
+}
+
+.bottom-tab.bottom-tab-special.active {
+  color: var(--accent-terracotta);
+}
+
+.bottom-tab.bottom-tab-special.active .bottom-tab-icon-wrap {
+  background: rgba(184, 134, 155, 0.16);
+  border-radius: 999px;
+  transform: translateY(-1px);
+}
+
+.bottom-tab.bottom-tab-special.active .bottom-tab-icon-wrap svg {
+  color: var(--accent-terracotta);
+}
+
+.bottom-tab.bottom-tab-special.active span {
   color: var(--accent-terracotta);
   font-weight: 900;
 }
