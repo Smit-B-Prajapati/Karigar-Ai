@@ -12,7 +12,7 @@ import {
   Check
 } from 'lucide-react';
 import Button from './Button.jsx';
-import { createSpeechRecognizer, isSpeechRecognitionSupported, sendAudioToBackendSTT, parseVoiceTranscript } from '../services/voiceService.js';
+import { createSpeechRecognizer, isSpeechRecognitionSupported, sendAudioToBackendSTT, parseVoiceTranscript, cleanRepeatedPhrases } from '../services/voiceService.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useLanguage } from '../context/LanguageContext.jsx';
 
@@ -121,8 +121,9 @@ export default function VoiceRecorderModal({
           },
           onResult: ({ transcript: recognizedText }) => {
             if (recognizedText && recognizedText.trim()) {
-              setTranscript(recognizedText.trim());
-              transcriptRef.current = recognizedText.trim();
+              const cleaned = cleanRepeatedPhrases(recognizedText.trim());
+              setTranscript(cleaned);
+              transcriptRef.current = cleaned;
             }
           },
           onError: (event) => {
@@ -229,7 +230,7 @@ export default function VoiceRecorderModal({
       try { mediaRecorderRef.current.stop(); } catch {}
     }
 
-    let finalText = (transcriptRef.current || transcript || '').trim();
+    let finalText = cleanRepeatedPhrases((transcriptRef.current || transcript || '').trim());
 
     // If no text captured from WebSpeech, attempt backend STT audio chunk decoding
     if (!finalText && audioChunksRef.current.length > 0) {
@@ -237,7 +238,7 @@ export default function VoiceRecorderModal({
       try {
         const res = await sendAudioToBackendSTT(audioBlob, selectedLanguage, token);
         if (res && res.success && res.transcript) {
-          finalText = res.transcript;
+          finalText = cleanRepeatedPhrases(res.transcript);
         }
       } catch (sttErr) {
         console.warn('Backend STT processing warning:', sttErr);
@@ -249,6 +250,7 @@ export default function VoiceRecorderModal({
       finalText = SAMPLE_FALLBACKS[selectedLanguage] || SAMPLE_FALLBACKS['hi-IN'];
     }
 
+    finalText = cleanRepeatedPhrases(finalText);
     setTranscript(finalText);
     transcriptRef.current = finalText;
 
@@ -257,6 +259,7 @@ export default function VoiceRecorderModal({
 
   const processFinalTranscript = async (textToProcess) => {
     setIsParsing(true);
+    const cleanedText = cleanRepeatedPhrases(textToProcess || '');
 
     // Hard safety timeout: guarantee the spinner never stays longer than 1.8s under any network circumstance
     const safetyTimeout = setTimeout(() => {

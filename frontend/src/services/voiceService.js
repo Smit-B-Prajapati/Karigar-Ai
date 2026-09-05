@@ -11,9 +11,84 @@ export function isSpeechRecognitionSupported() {
 }
 
 /**
+ * Merges two speech transcript strings by detecting suffix-prefix overlap.
+ * Prevents Android Web Speech API from repeating cumulative chunks.
+ */
+export function mergeOverlap(existing = '', incoming = '') {
+  const a = (existing || '').trim();
+  const b = (incoming || '').trim();
+  if (!a) return b;
+  if (!b) return a;
+  if (a === b) return a;
+  if (b.startsWith(a)) return b;
+  if (a.endsWith(b)) return a;
+
+  // Search for longest matching suffix of `a` that matches prefix of `b`
+  const maxLen = Math.min(a.length, b.length);
+  for (let len = maxLen; len > 0; len--) {
+    const suffix = a.slice(a.length - len);
+    const prefix = b.slice(0, len);
+    if (suffix === prefix) {
+      return (a + b.slice(len)).trim();
+    }
+  }
+
+  return (a + ' ' + b).trim();
+}
+
+/**
+ * Removes consecutive duplicate words and repeated phrases (stuttering speech / duplicate events).
+ * Handles Gujarati, Hindi, and English without corrupting authentic natural speech.
+ */
+export function cleanRepeatedPhrases(text = '') {
+  if (!text || typeof text !== 'string') return '';
+  const trimmed = text.trim();
+  if (!trimmed) return '';
+
+  const words = trimmed.split(/\s+/);
+  if (words.length <= 1) return trimmed;
+
+  // 1. Collapse immediate single-word duplicates ('હાથથી હાથથી' -> 'હાથથી')
+  const singleCleaned = [];
+  for (let i = 0; i < words.length; i++) {
+    if (i === 0 || words[i] !== words[i - 1]) {
+      singleCleaned.push(words[i]);
+    }
+  }
+
+  // 2. Collapse multi-word phrase duplicates (phrases of length 2 to 6 words)
+  let changed = true;
+  let loopCount = 0;
+  while (changed && loopCount < 10) {
+    changed = false;
+    loopCount++;
+    for (let phraseLen = 6; phraseLen >= 2; phraseLen--) {
+      if (singleCleaned.length < phraseLen * 2) continue;
+      for (let i = 0; i <= singleCleaned.length - phraseLen * 2; i++) {
+        let isMatch = true;
+        for (let k = 0; k < phraseLen; k++) {
+          if (singleCleaned[i + k] !== singleCleaned[i + phraseLen + k]) {
+            isMatch = false;
+            break;
+          }
+        }
+        if (isMatch) {
+          singleCleaned.splice(i + phraseLen, phraseLen);
+          changed = true;
+          break;
+        }
+      }
+      if (changed) break;
+    }
+  }
+
+  return singleCleaned.join(' ');
+}
+
+/**
  * Create and configure a browser SpeechRecognition instance
  * @param {string} language - 'en-IN' | 'hi-IN' | 'gu-IN'
- * @param {object} callbacks - { onResult, onError, onEnd, onStart }
+ * @param {object} callbacks - { onResult, onError, onEnd, onStart, shouldContinue }
  */
 export function createSpeechRecognizer(language = 'hi-IN', callbacks = {}) {
   if (!isSpeechRecognitionSupported()) return null;
@@ -26,9 +101,16 @@ export function createSpeechRecognizer(language = 'hi-IN', callbacks = {}) {
   recognition.lang = language || 'hi-IN';
   recognition.maxAlternatives = 1;
 
+  let sessionHistory = '';
+  let lastFinalTranscript = '';
+
   if (callbacks.onStart) recognition.onstart = callbacks.onStart;
 
   recognition.onend = (e) => {
+    // Retain speech finalized in this session before auto-restarting
+    if (lastFinalTranscript) {
+      sessionHistory = cleanRepeatedPhrases(mergeOverlap(sessionHistory, lastFinalTranscript));
+    }
     if (callbacks.shouldContinue && callbacks.shouldContinue()) {
       // Debounced auto-restart for mobile browsers when pausing between words
       setTimeout(() => {
@@ -47,25 +129,33 @@ export function createSpeechRecognizer(language = 'hi-IN', callbacks = {}) {
   
   if (callbacks.onResult) {
     recognition.onresult = (event) => {
-      let finalTranscript = '';
-      let interimTranscript = '';
+      let eventFinal = '';
+      let eventInterim = '';
 
-      // Direct calculation from event.results ensures zero duplication and handles Gujarati & Hindi accurately
+      // Direct overlap merge across event.results to prevent Android cumulative repeating
       for (let i = 0; i < event.results.length; i++) {
-        const transcriptChunk = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          finalTranscript += transcriptChunk + ' ';
+        const item = event.results[i];
+        if (!item || !item[0] || !item[0].transcript) continue;
+        const chunk = item[0].transcript.trim();
+        if (!chunk) continue;
+
+        if (item.isFinal) {
+          eventFinal = mergeOverlap(eventFinal, chunk);
         } else {
-          interimTranscript += transcriptChunk;
+          eventInterim = mergeOverlap(eventInterim, chunk);
         }
       }
 
-      const combined = (finalTranscript + interimTranscript).trim();
+      const totalFinal = mergeOverlap(sessionHistory, eventFinal);
+      lastFinalTranscript = totalFinal;
+
+      const rawCombined = mergeOverlap(totalFinal, eventInterim);
+      const cleanCombined = cleanRepeatedPhrases(rawCombined);
 
       callbacks.onResult({
-        finalTranscript: finalTranscript.trim(),
-        interimTranscript: interimTranscript.trim(),
-        transcript: combined,
+        finalTranscript: cleanRepeatedPhrases(totalFinal),
+        interimTranscript: cleanRepeatedPhrases(eventInterim),
+        transcript: cleanCombined,
         rawEvent: event
       });
     };
@@ -627,6 +717,8 @@ function fallbackClientEntityExtraction(text, language) {
 export default {
   isSpeechRecognitionSupported,
   createSpeechRecognizer,
+  mergeOverlap,
+  cleanRepeatedPhrases,
   sendAudioToBackendSTT,
   parseVoiceTranscript,
   sanitizeShortEnglishTitle,
