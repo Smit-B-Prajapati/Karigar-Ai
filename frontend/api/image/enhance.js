@@ -35,7 +35,7 @@ export default async function handler(req, res) {
     }
 
     // Call Remove.bg API with the configured API key
-    const removeBgApiKey = process.env.REMOVE_BG_API_KEY || 'TXin7LSFZGTk3xbebDrh6kNn';
+    const removeBgApiKey = process.env.REMOVE_BG_API_KEY || 'yVu6GqVqwJZqaoTrR56zkgg9';
 
     const response = await fetch('https://api.remove.bg/v1.0/removebg', {
       method: 'POST',
@@ -54,11 +54,23 @@ export default async function handler(req, res) {
       }),
     });
 
-    const resultData = await response.json().catch(() => null);
+    let transparentDataUrl = null;
+    const contentType = response.headers.get('content-type') || '';
 
-    if (resultData && resultData.data && resultData.data.result_b64) {
-      const transparentDataUrl = `data:image/png;base64,${resultData.data.result_b64}`;
+    if (contentType.includes('application/json')) {
+      const resultData = await response.json().catch(() => null);
+      if (resultData && resultData.data && resultData.data.result_b64) {
+        transparentDataUrl = `data:image/png;base64,${resultData.data.result_b64}`;
+      }
+    } else if (response.ok) {
+      const buffer = await response.arrayBuffer().catch(() => null);
+      if (buffer && buffer.byteLength > 0) {
+        const b64Out = Buffer.from(buffer).toString('base64');
+        transparentDataUrl = `data:image/png;base64,${b64Out}`;
+      }
+    }
 
+    if (transparentDataUrl) {
       return res.status(200).json({
         success: true,
         isConfigured: true,

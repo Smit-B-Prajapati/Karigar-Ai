@@ -359,9 +359,54 @@ export async function renderClientStudioCompositor(imageSrc, preset = 'Studio Cl
   });
 }
 
+const REMOVE_BG_API_KEY = 'yVu6GqVqwJZqaoTrR56zkgg9';
+
 /**
- * Enhance product photo using In-Browser Neural AI, Serverless Remove.bg API,
- * and Smart Multi-Cluster Studio Compositor.
+ * Direct Client-Side Remove.bg Call (CORS supported)
+ * Ensures Remove.bg works even if the backend server is not running locally.
+ */
+async function callRemoveBgDirect(base64Payload) {
+  try {
+    let cleanB64 = base64Payload;
+    if (cleanB64.includes('base64,')) {
+      cleanB64 = cleanB64.split('base64,')[1];
+    }
+    const res = await fetch('https://api.remove.bg/v1.0/removebg', {
+      method: 'POST',
+      headers: {
+        'X-Api-Key': REMOVE_BG_API_KEY,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({
+        image_file_b64: cleanB64,
+        size: 'preview',
+        type: 'auto',
+        crop: true,
+        crop_margin: '25px',
+        format: 'png',
+      }),
+    });
+
+    if (res.ok) {
+      const data = await res.json().catch(() => null);
+      if (data && data.data && data.data.result_b64) {
+        return `data:image/png;base64,${data.data.result_b64}`;
+      }
+    } else {
+      const errData = await res.json().catch(() => null);
+      console.warn('Remove.bg direct API response:', res.status, errData);
+    }
+    return null;
+  } catch (err) {
+    console.warn('Remove.bg direct client notice:', err.message);
+    return null;
+  }
+}
+
+/**
+ * Enhance product photo using Remove.bg AI Segmentation (API + Direct),
+ * In-Browser Neural AI, and Smart Multi-Cluster Studio Compositor.
  */
 export async function enhanceRawImage(imageInput, token = null, options = {}) {
   let imagePayload = imageInput;
@@ -377,7 +422,78 @@ export async function enhanceRawImage(imageInput, token = null, options = {}) {
     }
   }
 
-  // 1. Priority 1: Zero-cost In-Browser AI Segmentation (@imgly/background-removal)
+  // 1. Priority 1: Remove.bg AI Segmentation (via Backend/Vercel Serverless Endpoint)
+  try {
+    const headers = {};
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    const res = await apiRequest('/image/enhance', {
+      method: 'POST',
+      headers,
+      timeout: 10000,
+      body: JSON.stringify({
+        image: imagePayload,
+        productId: options.productId || 'temp',
+        preset: options.preset || 'Studio Clean White',
+      }),
+    });
+
+    if (res && res.success && (res.enhancedImageUrl || res.enhancedBase64 || res.transparentImageUrl)) {
+      const transparentUrl = res.transparentImageUrl || res.enhancedBase64 || res.enhancedImageUrl;
+      const studioComposite = await renderClientStudioCompositor(transparentUrl, options.preset || 'Studio Clean White');
+
+      return {
+        success: true,
+        isConfigured: true,
+        originalImageUrl: imagePayload,
+        enhancedImageUrl: studioComposite,
+        enhancedBase64: studioComposite,
+        enhancedImage: studioComposite,
+        message: 'Background removed with Remove.bg AI & Studio Lighting applied',
+        engine: res.engine || 'removebg-ai-segmentation',
+        enhancementDetails: {
+          background: `Studio Backdrop (${options.preset || 'Studio Clean White'})`,
+          lighting: 'AI High-Key Studio Lighting',
+          contrastBoost: '+8%',
+          vibrancyBoost: '+12%',
+          backgroundRemoved: true,
+        },
+      };
+    }
+  } catch (err) {
+    console.warn('Remove.bg serverless endpoint notice, checking direct Remove.bg client call:', err.message);
+  }
+
+  // 1B. Priority 1B: Direct Client Remove.bg (if local backend server is offline/dev mode)
+  try {
+    const directTransparentPng = await callRemoveBgDirect(imagePayload);
+    if (directTransparentPng) {
+      const studioComposite = await renderClientStudioCompositor(directTransparentPng, options.preset || 'Studio Clean White');
+      return {
+        success: true,
+        isConfigured: true,
+        originalImageUrl: imagePayload,
+        enhancedImageUrl: studioComposite,
+        enhancedBase64: studioComposite,
+        enhancedImage: studioComposite,
+        message: 'Background removed with Remove.bg AI & Studio Lighting applied',
+        engine: 'removebg-direct-client',
+        enhancementDetails: {
+          background: `Studio Backdrop (${options.preset || 'Studio Clean White'})`,
+          lighting: 'AI High-Key Studio Lighting',
+          contrastBoost: '+8%',
+          vibrancyBoost: '+12%',
+          backgroundRemoved: true,
+        },
+      };
+    }
+  } catch (directErr) {
+    console.warn('Remove.bg direct notice:', directErr.message);
+  }
+
+  // 2. Priority 2: Zero-cost In-Browser AI Segmentation (@imgly/background-removal)
   try {
     const localTransparentPng = await segmentWithLocalAI(imagePayload);
     if (localTransparentPng) {
@@ -402,51 +518,6 @@ export async function enhanceRawImage(imageInput, token = null, options = {}) {
     }
   } catch (localAiErr) {
     console.warn('Local neural AI notice:', localAiErr.message);
-  }
-
-  // 2. Priority 2: Remove.bg AI Segmentation API (via Vercel Serverless Function / Backend)
-  try {
-    const headers = {};
-    if (token) {
-      headers.Authorization = `Bearer ${token}`;
-    }
-
-    const res = await apiRequest('/image/enhance', {
-      method: 'POST',
-      headers,
-      timeout: 8000,
-      body: JSON.stringify({
-        image: imagePayload,
-        productId: options.productId || 'temp',
-        preset: options.preset || 'Studio Clean White',
-      }),
-    });
-
-    if (res && res.success && (res.enhancedImageUrl || res.enhancedBase64 || res.transparentImageUrl)) {
-      const transparentUrl = res.transparentImageUrl || res.enhancedBase64 || res.enhancedImageUrl;
-      // Composite the transparent craft cleanly onto studio infinity cove
-      const studioComposite = await renderClientStudioCompositor(transparentUrl, options.preset || 'Studio Clean White');
-
-      return {
-        success: true,
-        isConfigured: true,
-        originalImageUrl: imagePayload,
-        enhancedImageUrl: studioComposite,
-        enhancedBase64: studioComposite,
-        enhancedImage: studioComposite,
-        message: 'Background removed with AI & Studio Lighting applied',
-        engine: res.engine || 'removebg-ai-segmentation',
-        enhancementDetails: {
-          background: `Studio Backdrop (${options.preset || 'Studio Clean White'})`,
-          lighting: 'AI High-Key Studio Lighting',
-          contrastBoost: '+8%',
-          vibrancyBoost: '+12%',
-          backgroundRemoved: true,
-        },
-      };
-    }
-  } catch (err) {
-    console.warn('Remove.bg cloud endpoint notice, using Client Studio Segmentation:', err.message);
   }
 
   // 3. Priority 3: Client-Side Studio Compositor with Multi-Cluster Smart Perimeter Matting
