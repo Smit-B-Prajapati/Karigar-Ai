@@ -204,49 +204,49 @@ export default function ExplainablePricingCard({
           background: 'linear-gradient(135deg, rgba(184,134,155,0.18) 0%, rgba(246,196,146,0.18) 100%)',
           border: '1.5px solid rgba(184,134,155,0.35)',
           borderRadius: 'var(--radius-lg)',
-          padding: '1.35rem 1.5rem',
-          boxShadow: '0 4px 20px rgba(70, 45, 80, 0.08)',
+          padding: '0.85rem 1rem',
+          boxShadow: '0 4px 16px rgba(70, 45, 80, 0.08)',
           position: 'relative'
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1.1rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.65rem' }}>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', color: 'var(--accent-terracotta)', fontWeight: 800, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              <Sparkles size={15} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--accent-terracotta)', fontWeight: 800, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <Sparkles size={14} />
               <span>{isHindi ? 'एआई-सहायक मूल्य सिफारिश' : 'AI-Assisted Price Recommendation'}</span>
             </div>
             
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem', marginTop: '0.25rem', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '2.5rem', fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.65rem', marginTop: '0.15rem', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '1.85rem', fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>
                 ₹ {pricing.recommendedPrice?.toLocaleString('en-IN')}
               </span>
               
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.25rem 0.65rem', borderRadius: 'var(--radius-full)', background: '#ffffff', border: '1px solid var(--border-color)', boxShadow: '0 2px 8px rgba(70, 45, 80, 0.05)' }}>
-                <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                  {isHindi ? 'अनुमानित सीमा:' : 'Estimated Range:'}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.2rem 0.55rem', borderRadius: 'var(--radius-full)', background: '#ffffff', border: '1px solid var(--border-color)', boxShadow: '0 2px 6px rgba(70, 45, 80, 0.04)' }}>
+                <span style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>
+                  {isHindi ? 'सीमा:' : 'Range:'}
                 </span>
-                <strong style={{ fontSize: '0.85rem', color: 'var(--accent-gold)' }}>
+                <strong style={{ fontSize: '0.78rem', color: 'var(--accent-gold)' }}>
                   {pricing.recommendedRange?.formatted || '₹1,499 – ₹1,799'}
                 </strong>
               </div>
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
             {/* Confidence Score Pill */}
             <div style={{
               background: pricing.confidence >= 75 ? 'rgba(13,148,136,0.12)' : 'rgba(217,119,6,0.12)',
               border: `1px solid ${pricing.confidence >= 75 ? 'rgba(13,148,136,0.35)' : 'rgba(217,119,6,0.35)'}`,
               color: pricing.confidence >= 75 ? 'var(--success)' : 'var(--warning)',
-              padding: '0.3rem 0.75rem',
+              padding: '0.25rem 0.6rem',
               borderRadius: 'var(--radius-full)',
-              fontSize: '0.78rem',
+              fontSize: '0.72rem',
               fontWeight: 800,
               display: 'flex',
               alignItems: 'center',
-              gap: '0.35rem'
+              gap: '0.3rem'
             }}>
-              <Zap size={13} /> {isHindi ? 'विश्वसनीयता:' : 'Confidence:'} {pricing.confidence}% ({pricing.confidenceLevel === 'High' ? (isHindi ? 'उच्च' : 'High') : (isHindi ? 'मध्यम' : pricing.confidenceLevel || 'High')})
+              <Zap size={12} /> {isHindi ? 'विश्वास:' : 'Conf:'} {pricing.confidence}%
             </div>
           </div>
         </div>
@@ -254,47 +254,47 @@ export default function ExplainablePricingCard({
         {/* 4 Core Instant Metrics */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
-          gap: '0.65rem',
-          padding: '0.85rem',
+          gridTemplateColumns: 'repeat(2, 1fr)',
+          gap: '0.45rem',
+          padding: '0.55rem 0.75rem',
           borderRadius: 'var(--radius-md)',
           background: '#ffffff',
           border: '1px solid var(--border-color)',
-          boxShadow: '0 2px 10px rgba(70, 45, 80, 0.04)',
-          marginBottom: '1.1rem'
+          boxShadow: '0 2px 8px rgba(70, 45, 80, 0.04)',
+          marginBottom: '0.75rem'
         }}>
           <div>
-            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>
+            <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>
               {isHindi ? 'उत्पादन लागत' : 'Production Cost'}
             </span>
-            <p style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-primary)', margin: '0.15rem 0 0 0' }}>
+            <p style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)', margin: '0.1rem 0 0 0' }}>
               ₹ {productionCost.toLocaleString('en-IN')}
             </p>
           </div>
 
           <div>
-            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>
+            <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>
               {isHindi ? 'अनुमानित लाभ' : 'Estimated Profit'}
             </span>
-            <p style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--success)', margin: '0.15rem 0 0 0' }}>
+            <p style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--success)', margin: '0.1rem 0 0 0' }}>
               + ₹ {pricing.estimatedProfit?.toLocaleString('en-IN')}
             </p>
           </div>
 
           <div>
-            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>
+            <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>
               {isHindi ? 'लाभ मार्जिन' : 'Profit Margin'}
             </span>
-            <p style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--accent-gold)', margin: '0.15rem 0 0 0' }}>
+            <p style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--accent-gold)', margin: '0.1rem 0 0 0' }}>
               {pricing.profitMargin}%
             </p>
           </div>
 
           <div>
-            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>
+            <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>
               {isHindi ? 'मूल्य निर्धारण मॉडल' : 'Pricing Model'}
             </span>
-            <p style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--accent-primary)', margin: '0.2rem 0 0 0', whiteSpace: 'nowrap' }}>
+            <p style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--accent-primary)', margin: '0.1rem 0 0 0', whiteSpace: 'nowrap' }}>
               {marketData?.available 
                 ? (isHindi ? 'लागत-प्लस और बाज़ार' : 'Cost-Plus & Market')
                 : (isHindi ? 'कारीगर लागत-प्लस' : 'Artisan Cost-Plus')}

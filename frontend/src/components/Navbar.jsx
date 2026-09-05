@@ -57,14 +57,23 @@ export default function Navbar({ currentLang, onToggleLang }) {
           ))}
         </nav>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexShrink: 0 }}>
           {user && (user.email === 'ramesh@karigar.in' || user.isDemo) && (
             <span 
               className="lang-badge" 
-              style={{ background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)', color: 'var(--success)', fontSize: '0.78rem', fontWeight: 600 }}
+              style={{ 
+                background: 'rgba(16,185,129,0.12)', 
+                border: '1px solid rgba(16,185,129,0.3)', 
+                color: 'var(--success)', 
+                fontSize: '0.75rem', 
+                fontWeight: 600,
+                padding: '0.3rem 0.55rem',
+                flexShrink: 0
+              }}
               title="Demo Mode Active"
             >
-              {t('nav.demoMode', '● Demo Mode Ready')}
+              <span className="desktop-only">{t('nav.demoMode', '● Demo Mode Ready')}</span>
+              <span className="mobile-only">● Demo</span>
             </span>
           )}
 
@@ -78,40 +87,45 @@ export default function Navbar({ currentLang, onToggleLang }) {
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              gap: '0.4rem',
+              gap: '0.3rem',
               fontWeight: 700,
               background: activeLang === 'HI' ? 'rgba(230, 81, 0, 0.18)' : 'var(--bg-secondary)',
               border: activeLang === 'HI' ? '1px solid var(--accent-terracotta)' : '1px solid var(--border-color)',
               color: activeLang === 'HI' ? 'var(--accent-terracotta)' : 'var(--text-primary)',
               transition: 'all 0.2s ease',
-              padding: '0.4rem 0.75rem'
+              padding: '0.3rem 0.6rem',
+              fontSize: '0.78rem',
+              flexShrink: 0
             }}
           >
-            <Globe size={15} color={activeLang === 'HI' ? 'var(--accent-terracotta)' : 'var(--accent-gold)'} />
-            <span>{activeLang === 'HI' ? '🇮🇳 हिन्दी (HI)' : '🌐 English (EN)'}</span>
+            <Globe size={14} color={activeLang === 'HI' ? 'var(--accent-terracotta)' : 'var(--accent-gold)'} />
+            <span className="desktop-only">{activeLang === 'HI' ? '🇮🇳 हिन्दी (HI)' : '🌐 English (EN)'}</span>
+            <span className="mobile-only">{activeLang === 'HI' ? 'हिन्दी' : 'EN'}</span>
           </button>
 
           {isAuthenticated ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0 }}>
+              <span className="desktop-only" style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>
                 {user?.name?.split(' ')[0]}
               </span>
               <button
                 onClick={handleLogout}
                 style={{
-                  background: 'rgba(239,68,68,0.15)',
-                  border: '1px solid rgba(239,68,68,0.3)',
+                  background: 'rgba(239,68,68,0.12)',
+                  border: '1px solid rgba(239,68,68,0.35)',
                   color: 'var(--danger)',
                   borderRadius: 'var(--radius-sm)',
-                  padding: '0.4rem 0.6rem',
-                  fontSize: '0.8rem',
-                  fontWeight: 600,
+                  padding: '0.3rem 0.6rem',
+                  fontSize: '0.78rem',
+                  fontWeight: 700,
                   display: 'flex',
                   alignItems: 'center',
                   gap: '0.3rem',
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  flexShrink: 0
                 }}
-                title="Log Out"
+                title={t('nav.logout', 'Log Out')}
+                aria-label="Log Out"
               >
                 <LogOut size={14} />
                 <span>{t('nav.logout', 'Logout')}</span>

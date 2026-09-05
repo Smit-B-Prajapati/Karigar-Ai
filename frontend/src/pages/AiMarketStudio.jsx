@@ -210,19 +210,24 @@ export default function AiMarketStudio({ addToast }) {
   useEffect(() => {
     async function loadData() {
       setLoadingProducts(true);
-      const isDemoAccount = Boolean(user && (user.email === 'ramesh@karigar.in' || user.isDemo));
       const userKey = user?.email || user?.id || '';
 
       try {
         if (token) {
           const res = await getProducts(token);
-          if (res.success && res.products && res.products.length > 0) {
-            setProducts(res.products);
-            const stateProdId = location.state?.productId;
-            const target = res.products.find(p => (p._id || p.id) === stateProdId) || res.products[0];
-            setSelectedProductId(target._id || target.id);
-            populateProductContext(target);
-            return;
+          if (res.success && Array.isArray(res.products)) {
+            const clean = res.products.filter(p => !p.isDemoFallback && !String(p.id || p._id || '').startsWith('fallback_'));
+            if (clean.length > 0) {
+              setProducts(clean);
+              const stateProdId = location.state?.productId;
+              const target = clean.find(p => (p._id || p.id) === stateProdId) || clean[0];
+              setSelectedProductId(target._id || target.id);
+              populateProductContext(target);
+              if (userKey) {
+                localStorage.setItem(`karigar_products_${userKey}`, JSON.stringify(clean));
+              }
+              return;
+            }
           }
         }
 
@@ -232,38 +237,30 @@ export default function AiMarketStudio({ addToast }) {
           if (cached) {
             try {
               const parsed = JSON.parse(cached);
-              if (Array.isArray(parsed) && parsed.length > 0) {
-                setProducts(parsed);
-                const target = parsed[0];
-                setSelectedProductId(target._id || target.id);
-                populateProductContext(target);
-                return;
+              if (Array.isArray(parsed)) {
+                const clean = parsed.filter(p => !p.isDemoFallback && !String(p.id || p._id || '').startsWith('fallback_'));
+                localStorage.setItem(`karigar_products_${userKey}`, JSON.stringify(clean));
+                if (clean.length > 0) {
+                  setProducts(clean);
+                  const stateProdId = location.state?.productId;
+                  const target = clean.find(p => (p._id || p.id) === stateProdId) || clean[0];
+                  setSelectedProductId(target._id || target.id);
+                  populateProductContext(target);
+                  return;
+                }
               }
             } catch (e) {}
           }
         }
 
-        if (isDemoAccount) {
-          setProducts(mockProducts);
-          const target = mockProducts[0];
-          setSelectedProductId(target._id || target.id);
-          populateProductContext(target);
-        } else {
-          setProducts([]);
-          setSelectedProductId('');
-          setCurrentProduct(null);
-        }
+        setProducts([]);
+        setSelectedProductId('');
+        setCurrentProduct(null);
       } catch (err) {
         console.warn('AI Market Studio load products fallback:', err);
-        if (isDemoAccount) {
-          setProducts(mockProducts);
-          setSelectedProductId(mockProducts[0]._id || mockProducts[0].id);
-          populateProductContext(mockProducts[0]);
-        } else {
-          setProducts([]);
-          setSelectedProductId('');
-          setCurrentProduct(null);
-        }
+        setProducts([]);
+        setSelectedProductId('');
+        setCurrentProduct(null);
       } finally {
         setLoadingProducts(false);
       }
@@ -464,17 +461,17 @@ export default function AiMarketStudio({ addToast }) {
     <div className="main-container" style={{ maxWidth: '920px' }}>
       
       {/* Header Banner */}
-      <div style={{ marginBottom: '1.25rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.25rem' }}>
-          <div style={{ padding: '0.55rem', borderRadius: 'var(--radius-md)', background: 'linear-gradient(135deg, rgba(184,134,155,0.25) 0%, rgba(246,196,146,0.15) 100%)', color: 'var(--accent-primary)', border: '1px solid rgba(184,134,155,0.35)' }}>
-            <TrendingUp size={24} />
+      <div style={{ marginBottom: '0.75rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.15rem' }}>
+          <div style={{ padding: '0.4rem', borderRadius: 'var(--radius-md)', background: 'linear-gradient(135deg, rgba(184,134,155,0.25) 0%, rgba(246,196,146,0.15) 100%)', color: 'var(--accent-primary)', border: '1px solid rgba(184,134,155,0.35)' }}>
+            <TrendingUp size={20} />
           </div>
           <div>
-            <h1 style={{ fontSize: '1.75rem', fontWeight: 900, letterSpacing: '-0.3px' }}>
+            <h1 style={{ fontSize: '1.25rem', fontWeight: 900, letterSpacing: '-0.3px', margin: 0 }}>
               {t('studio.pricingHeader', 'DYNAMIC PRICING & MARKET ADVISOR')}
             </h1>
-            <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)' }}>
-              {t('studio.pricingSub', 'AI-powered pricing recommendations based on your product, costs and available market signals.')}
+            <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: '0.1rem 0 0 0' }}>
+              {t('studio.pricingSub', 'AI-powered pricing recommendations based on your product, costs and market signals.')}
             </p>
           </div>
         </div>
@@ -494,285 +491,268 @@ export default function AiMarketStudio({ addToast }) {
             background: 'var(--bg-card)',
             border: '1px solid var(--border-color)',
             borderRadius: 'var(--radius-lg)',
-        padding: '1.15rem 1.25rem',
-        boxShadow: '0 4px 20px rgba(0,0,0,0.18)',
-        marginBottom: '1.25rem'
-      }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-          
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
-            <div style={{ flex: 1, minWidth: '260px' }}>
-              <label style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: '0.3rem' }}>
-                {t('studio.selectProduct', 'Select Active Craft Product:')}
-              </label>
-              <select 
-                className="form-select"
-                value={selectedProductId}
-                onChange={handleProductChange}
-                style={{ fontWeight: 700, padding: '0.55rem 0.8rem' }}
-                disabled={loadingProducts}
-              >
-                {products.map(p => (
-                  <option key={p._id || p.id} value={p._id || p.id}>
-                    {p.isDemoFallback || String(p._id || p.id).startsWith('fallback_') ? '🎨 [Demo] ' : '📦 '}
-                    {p.name || p.title} ({translateCategory(p.category || 'Craft')} — ₹{p.price})
-                  </option>
-                ))}
-              </select>
-            </div>
+            padding: '0.65rem 0.85rem',
+            boxShadow: '0 4px 18px rgba(0,0,0,0.15)',
+            marginBottom: '0.75rem'
+          }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              
+              <div>
+                <label style={{ fontSize: '0.72rem', fontWeight: 800, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: '0.25rem' }}>
+                  {t('studio.selectProduct', 'Select Active Craft Product:')}
+                </label>
+                <select 
+                  className="form-select"
+                  value={selectedProductId}
+                  onChange={handleProductChange}
+                  style={{ fontWeight: 700, padding: '0.45rem 0.75rem', width: '100%', fontSize: '0.88rem' }}
+                  disabled={loadingProducts}
+                >
+                  {products.map(p => (
+                    <option key={p._id || p.id} value={p._id || p.id}>
+                      {p.isDemoFallback || String(p._id || p.id).startsWith('fallback_') ? '🎨 [Demo] ' : '📦 '}
+                      {p.name || p.title} ({translateCategory(p.category || 'Craft')} — ₹{p.price})
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => navigate('/add-product')}
-            >
-              {t('home.addNewCraft', '+ Add New Craft')}
-            </Button>
-          </div>
-
-          {/* Product Details Spotlight Bar */}
-          {currentProduct && (
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.85rem',
-              padding: '0.75rem 0.9rem',
-              borderRadius: 'var(--radius-md)',
-              background: 'rgba(253,246,226,0.03)',
-              border: '1px solid var(--border-color)',
-              flexWrap: 'wrap'
-            }}>
-              {currentProduct.enhancedImage || currentProduct.originalImage || currentProduct.image ? (
-                <img 
-                  src={currentProduct.enhancedImage || currentProduct.originalImage || currentProduct.image} 
-                  alt={currentProduct.name} 
-                  style={{ width: '50px', height: '50px', borderRadius: 'var(--radius-sm)', objectFit: 'cover', border: '1px solid rgba(253,246,226,0.15)' }} 
-                />
-              ) : (
-                <div style={{ width: '50px', height: '50px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Package size={24} color="var(--accent-primary)" />
+              {/* Product Details Spotlight Bar */}
+              {currentProduct && (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.65rem',
+                  padding: '0.45rem 0.65rem',
+                  borderRadius: 'var(--radius-md)',
+                  background: 'rgba(253,246,226,0.03)',
+                  border: '1px solid var(--border-color)'
+                }}>
+                  {currentProduct.enhancedImage || currentProduct.originalImage || currentProduct.image ? (
+                    <img 
+                      src={currentProduct.enhancedImage || currentProduct.originalImage || currentProduct.image} 
+                      alt={currentProduct.name} 
+                      style={{ width: '40px', height: '40px', borderRadius: 'var(--radius-sm)', objectFit: 'cover', border: '1px solid rgba(253,246,226,0.15)', flexShrink: 0 }} 
+                    />
+                  ) : (
+                    <div style={{ width: '40px', height: '40px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <Package size={20} color="var(--accent-primary)" />
+                    </div>
+                  )}
+                  
+                  <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+                      <h3 style={{ fontSize: '0.88rem', fontWeight: 800, margin: 0, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {currentProduct.name || currentProduct.title}
+                      </h3>
+                      <span style={{ fontSize: '0.7rem', background: 'rgba(246,196,146,0.15)', color: 'var(--accent-gold)', padding: '0.1rem 0.45rem', borderRadius: 'var(--radius-full)', fontWeight: 800 }}>
+                        {language === 'HI' ? 'मूल्य:' : 'Price:'} ₹{currentProduct.price}
+                      </span>
+                    </div>
+                    
+                    <p style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', margin: '0.1rem 0 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <strong style={{ color: 'var(--accent-gold)' }}>{translateCategory(currentProduct.category) || 'Traditional Craft'}</strong>
+                      {currentProduct.craftType && ` • ${currentProduct.craftType}`}
+                      {currentProduct.material && ` • ${currentProduct.material}`}
+                    </p>
+                  </div>
                 </div>
               )}
-              
-              <div style={{ flex: 1, minWidth: '220px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                  <h3 style={{ fontSize: '1rem', fontWeight: 800, margin: 0, color: '#fff' }}>
-                    {currentProduct.name || currentProduct.title}
-                  </h3>
-                  <span style={{ fontSize: '0.75rem', background: 'rgba(246,196,146,0.15)', color: 'var(--accent-gold)', padding: '0.15rem 0.5rem', borderRadius: 'var(--radius-full)', fontWeight: 800 }}>
-                    {language === 'HI' ? 'सूचीबद्ध मूल्य:' : 'Listing Price:'} ₹{currentProduct.price}
-                  </span>
-                </div>
-                
-                <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '0.15rem 0 0 0' }}>
-                  <strong style={{ color: 'var(--accent-gold)' }}>{translateCategory(currentProduct.category) || 'Traditional Craft'}</strong>
-                  {currentProduct.craftType && ` • ${currentProduct.craftType}`}
-                  {currentProduct.material && ` • ${currentProduct.material}`}
-                </p>
 
-                {currentProduct.description && (
-                  <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: '0.15rem 0 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '580px' }}>
-                    {currentProduct.description}
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
-
-        </div>
-      </div>
-
-      {/* Main Studio Navigation Tabs */}
-      <div style={{
-        display: 'flex',
-        gap: '0.5rem',
-        marginBottom: '1.25rem',
-        borderBottom: '1px solid var(--border-color)',
-        paddingBottom: '0.5rem'
-      }}>
-        <button
-          onClick={() => setActiveTab('smart-pricing')}
-          style={{
-            padding: '0.55rem 1.2rem',
-            borderRadius: 'var(--radius-sm)',
-            background: activeTab === 'smart-pricing' ? 'linear-gradient(135deg, #b8869b 0%, #d498b0 100%)' : 'rgba(253,246,226,0.04)',
-            color: activeTab === 'smart-pricing' ? '#1c1521' : 'var(--text-secondary)',
-            fontWeight: 800,
-            fontSize: '0.88rem',
-            border: 'none',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.45rem',
-            transition: 'all 0.2s',
-            boxShadow: activeTab === 'smart-pricing' ? '0 4px 15px rgba(184,134,155,0.35)' : 'none'
-          }}
-        >
-          <DollarSign size={16} /> 1. {t('studio.tabPricing', 'Smart Cost-Plus Pricing')}
-        </button>
-
-        <button
-          onClick={() => setActiveTab('selling-advisor')}
-          style={{
-            padding: '0.55rem 1.2rem',
-            borderRadius: 'var(--radius-sm)',
-            background: activeTab === 'selling-advisor' ? 'linear-gradient(135deg, #b8869b 0%, #d498b0 100%)' : 'rgba(253,246,226,0.04)',
-            color: activeTab === 'selling-advisor' ? '#1c1521' : 'var(--text-secondary)',
-            fontWeight: 800,
-            fontSize: '0.88rem',
-            border: 'none',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.45rem',
-            transition: 'all 0.2s',
-            boxShadow: activeTab === 'selling-advisor' ? '0 4px 15px rgba(184,134,155,0.35)' : 'none'
-          }}
-        >
-          <Lightbulb size={16} /> 2. {t('studio.tabAdvisor', 'AI Business Advisor')}
-        </button>
-      </div>
-
-      {/* TAB 1: DYNAMIC PRICING ASSISTANT (INPUT PANEL ON TOP, OUTPUT & TOGGLE BELOW) */}
-      {activeTab === 'smart-pricing' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-          
-          {/* 1. PRODUCTION COST INPUTS PANEL */}
-          <div
-            style={{
-              background: 'var(--bg-card)',
-              border: '1px solid var(--border-color)',
-              borderRadius: 'var(--radius-lg)',
-              padding: '1.25rem',
-              boxShadow: '0 4px 20px rgba(0,0,0,0.18)'
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-              <div>
-                <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#fff', margin: 0 }}>
-                  {language === 'HI' ? 'उत्पादन लागत इनपुट' : 'Production Cost Inputs'}
-                </h3>
-                <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: '0.15rem 0 0 0' }}>
-                  {language === 'HI' ? 'उचित मूल्य की गणना के लिए लागत समायोजित करें' : 'Adjust raw costs to calculate fair pricing'}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={handleResetCosts}
-                title="Reset to default costs"
-                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.75rem' }}
-              >
-                <RotateCcw size={13} /> {language === 'HI' ? 'रीसेट' : 'Reset'}
-              </button>
-            </div>
-
-            {/* 4 Cost Input Fields in Responsive Grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '0.85rem', marginBottom: '1rem' }}>
-              
-              {/* 1. Raw Materials */}
-              <div>
-                <label style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.3rem' }}>
-                  <Scissors size={13} color="var(--accent-gold)" /> {language === 'HI' ? 'कच्चा माल' : 'Raw Materials'}
-                </label>
-                <div style={{ position: 'relative' }}>
-                  <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontWeight: 700, color: 'var(--text-muted)' }}>₹</span>
-                  <input 
-                    type="number" 
-                    min="0" 
-                    className="form-input" 
-                    value={materialCost} 
-                    onChange={(e) => handleCostInputChange('material', e.target.value)} 
-                    style={{ paddingLeft: '1.8rem', fontWeight: 700 }}
-                  />
-                </div>
-              </div>
-
-              {/* 2. Artisan Labour */}
-              <div>
-                <label style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.3rem' }}>
-                  <Hammer size={13} color="var(--accent-terracotta)" /> {language === 'HI' ? 'कारीगर श्रम' : 'Artisan Labour'}
-                </label>
-                <div style={{ position: 'relative' }}>
-                  <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontWeight: 700, color: 'var(--text-muted)' }}>₹</span>
-                  <input 
-                    type="number" 
-                    min="0" 
-                    className="form-input" 
-                    value={labourCost} 
-                    onChange={(e) => handleCostInputChange('labour', e.target.value)} 
-                    style={{ paddingLeft: '1.8rem', fontWeight: 700 }}
-                  />
-                </div>
-              </div>
-
-              {/* 3. Packaging & Box */}
-              <div>
-                <label style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.3rem' }}>
-                  <Box size={13} color="var(--info)" /> {language === 'HI' ? 'पैकेजिंग और डिब्बा' : 'Packaging & Box'}
-                </label>
-                <div style={{ position: 'relative' }}>
-                  <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontWeight: 700, color: 'var(--text-muted)' }}>₹</span>
-                  <input 
-                    type="number" 
-                    min="0" 
-                    className="form-input" 
-                    value={packagingCost} 
-                    onChange={(e) => handleCostInputChange('packaging', e.target.value)} 
-                    style={{ paddingLeft: '1.8rem', fontWeight: 700 }}
-                  />
-                </div>
-              </div>
-
-              {/* 4. Overhead & Logistics */}
-              <div>
-                <label style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.3rem' }}>
-                  <Truck size={13} color="var(--success)" /> {language === 'HI' ? 'अन्य खर्च' : 'Other Overhead'}
-                </label>
-                <div style={{ position: 'relative' }}>
-                  <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontWeight: 700, color: 'var(--text-muted)' }}>₹</span>
-                  <input 
-                    type="number" 
-                    min="0" 
-                    className="form-input" 
-                    value={otherCost} 
-                    onChange={(e) => handleCostInputChange('other', e.target.value)} 
-                    style={{ paddingLeft: '1.8rem', fontWeight: 700 }}
-                  />
-                </div>
-              </div>
-
-            </div>
-
-            {/* Total Production Cost Highlight Bar */}
-            <div style={{
-              padding: '0.85rem 1rem',
-              borderRadius: 'var(--radius-md)',
-              background: 'linear-gradient(135deg, rgba(184,134,155,0.2) 0%, rgba(246,196,146,0.12) 100%)',
-              border: '1px solid rgba(184,134,155,0.4)'
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
-                <span style={{ fontWeight: 700, fontSize: '0.85rem', color: '#fff' }}>{language === 'HI' ? 'कुल उत्पादन लागत:' : 'Total Production Cost:'}</span>
-                <span style={{ fontSize: '1.35rem', fontWeight: 900, color: 'var(--accent-gold)' }}>
-                  ₹{totalProductionCost.toLocaleString('en-IN')}
-                </span>
-              </div>
-
-              {/* Mini Distribution Bar */}
-              <div style={{ height: '6px', borderRadius: 'var(--radius-full)', background: 'rgba(255,255,255,0.08)', display: 'flex', overflow: 'hidden', marginBottom: '0.35rem' }}>
-                <div style={{ width: `${matPct}%`, background: 'var(--accent-gold)' }} title={`Material: ${matPct}%`} />
-                <div style={{ width: `${labPct}%`, background: 'var(--accent-primary)' }} title={`Labour: ${labPct}%`} />
-                <div style={{ width: `${pkgPct}%`, background: 'var(--info)' }} title={`Packaging: ${pkgPct}%`} />
-                <div style={{ width: `${othPct}%`, background: 'var(--success)' }} title={`Overhead: ${othPct}%`} />
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                <span>{language === 'HI' ? 'सामग्री' : 'Mat'}: {matPct}%</span>
-                <span>{language === 'HI' ? 'श्रम' : 'Lab'}: {labPct}%</span>
-                <span>{language === 'HI' ? 'पैकेजिंग' : 'Pkg'}: {pkgPct}%</span>
-                <span>{language === 'HI' ? 'अन्य' : 'Oth'}: {othPct}%</span>
-              </div>
             </div>
           </div>
+
+          {/* Main Studio Navigation Tabs */}
+          <div style={{
+            display: 'flex',
+            gap: '0.4rem',
+            marginBottom: '0.65rem',
+            borderBottom: '1px solid var(--border-color)',
+            paddingBottom: '0.35rem'
+          }}>
+            <button
+              onClick={() => setActiveTab('smart-pricing')}
+              style={{
+                padding: '0.45rem 0.9rem',
+                borderRadius: 'var(--radius-sm)',
+                background: activeTab === 'smart-pricing' ? 'linear-gradient(135deg, #b8869b 0%, #d498b0 100%)' : 'rgba(253,246,226,0.04)',
+                color: activeTab === 'smart-pricing' ? '#1c1521' : 'var(--text-secondary)',
+                fontWeight: 800,
+                fontSize: '0.82rem',
+                border: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                transition: 'all 0.2s',
+                boxShadow: activeTab === 'smart-pricing' ? '0 4px 15px rgba(184,134,155,0.35)' : 'none'
+              }}
+            >
+              <DollarSign size={14} /> 1. {t('studio.tabPricing', 'Smart Cost-Plus Pricing')}
+            </button>
+
+            <button
+              onClick={() => setActiveTab('selling-advisor')}
+              style={{
+                padding: '0.45rem 0.9rem',
+                borderRadius: 'var(--radius-sm)',
+                background: activeTab === 'selling-advisor' ? 'linear-gradient(135deg, #b8869b 0%, #d498b0 100%)' : 'rgba(253,246,226,0.04)',
+                color: activeTab === 'selling-advisor' ? '#1c1521' : 'var(--text-secondary)',
+                fontWeight: 800,
+                fontSize: '0.82rem',
+                border: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                transition: 'all 0.2s',
+                boxShadow: activeTab === 'selling-advisor' ? '0 4px 15px rgba(184,134,155,0.35)' : 'none'
+              }}
+            >
+              <Lightbulb size={14} /> 2. {t('studio.tabAdvisor', 'AI Business Advisor')}
+            </button>
+          </div>
+
+          {/* TAB 1: DYNAMIC PRICING ASSISTANT (INPUT PANEL ON TOP, OUTPUT & TOGGLE BELOW) */}
+          {activeTab === 'smart-pricing' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              
+              {/* 1. PRODUCTION COST INPUTS PANEL */}
+              <div
+                style={{
+                  background: 'var(--bg-card)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 'var(--radius-lg)',
+                  padding: '0.65rem 0.85rem',
+                  boxShadow: '0 4px 18px rgba(0,0,0,0.15)'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                    <h3 style={{ fontSize: '0.9rem', fontWeight: 800, color: '#fff', margin: 0 }}>
+                      {language === 'HI' ? 'उत्पादन लागत इनपुट' : 'Production Cost Inputs'}
+                    </h3>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+                      ({language === 'HI' ? 'लागत समायोजित करें' : 'Adjust raw costs'})
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleResetCosts}
+                    title="Reset to default costs"
+                    style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.72rem' }}
+                  >
+                    <RotateCcw size={12} /> {language === 'HI' ? 'रीसेट' : 'Reset'}
+                  </button>
+                </div>
+
+                {/* 4 Cost Input Fields in Compact 2x2 Grid */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.45rem', marginBottom: '0.55rem' }}>
+                  
+                  {/* 1. Raw Materials */}
+                  <div>
+                    <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.25rem', marginBottom: '0.2rem' }}>
+                      <Scissors size={12} color="var(--accent-gold)" /> {language === 'HI' ? 'कच्चा माल' : 'Raw Materials'}
+                    </label>
+                    <div style={{ position: 'relative' }}>
+                      <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', fontWeight: 700, fontSize: '0.8rem', color: 'var(--text-muted)' }}>₹</span>
+                      <input 
+                        type="number" 
+                        min="0" 
+                        className="form-input" 
+                        value={materialCost} 
+                        onChange={(e) => handleCostInputChange('material', e.target.value)} 
+                        style={{ padding: '0.35rem 0.5rem 0.35rem 1.4rem', height: '34px', fontSize: '0.85rem', fontWeight: 700, width: '100%' }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* 2. Artisan Labour */}
+                  <div>
+                    <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.25rem', marginBottom: '0.2rem' }}>
+                      <Hammer size={12} color="var(--accent-terracotta)" /> {language === 'HI' ? 'कारीगर श्रम' : 'Artisan Labour'}
+                    </label>
+                    <div style={{ position: 'relative' }}>
+                      <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', fontWeight: 700, fontSize: '0.8rem', color: 'var(--text-muted)' }}>₹</span>
+                      <input 
+                        type="number" 
+                        min="0" 
+                        className="form-input" 
+                        value={labourCost} 
+                        onChange={(e) => handleCostInputChange('labour', e.target.value)} 
+                        style={{ padding: '0.35rem 0.5rem 0.35rem 1.4rem', height: '34px', fontSize: '0.85rem', fontWeight: 700, width: '100%' }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* 3. Packaging & Box */}
+                  <div>
+                    <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.25rem', marginBottom: '0.2rem' }}>
+                      <Box size={12} color="var(--info)" /> {language === 'HI' ? 'पैकेजिंग और डिब्बा' : 'Packaging & Box'}
+                    </label>
+                    <div style={{ position: 'relative' }}>
+                      <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', fontWeight: 700, fontSize: '0.8rem', color: 'var(--text-muted)' }}>₹</span>
+                      <input 
+                        type="number" 
+                        min="0" 
+                        className="form-input" 
+                        value={packagingCost} 
+                        onChange={(e) => handleCostInputChange('packaging', e.target.value)} 
+                        style={{ padding: '0.35rem 0.5rem 0.35rem 1.4rem', height: '34px', fontSize: '0.85rem', fontWeight: 700, width: '100%' }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* 4. Overhead & Logistics */}
+                  <div>
+                    <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.25rem', marginBottom: '0.2rem' }}>
+                      <Truck size={12} color="var(--success)" /> {language === 'HI' ? 'अन्य खर्च' : 'Other Overhead'}
+                    </label>
+                    <div style={{ position: 'relative' }}>
+                      <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', fontWeight: 700, fontSize: '0.8rem', color: 'var(--text-muted)' }}>₹</span>
+                      <input 
+                        type="number" 
+                        min="0" 
+                        className="form-input" 
+                        value={otherCost} 
+                        onChange={(e) => handleCostInputChange('other', e.target.value)} 
+                        style={{ padding: '0.35rem 0.5rem 0.35rem 1.4rem', height: '34px', fontSize: '0.85rem', fontWeight: 700, width: '100%' }}
+                      />
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* Total Production Cost Highlight Bar */}
+                <div style={{
+                  padding: '0.4rem 0.7rem',
+                  borderRadius: 'var(--radius-md)',
+                  background: 'linear-gradient(135deg, rgba(184,134,155,0.2) 0%, rgba(246,196,146,0.12) 100%)',
+                  border: '1px solid rgba(184,134,155,0.4)'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                    <span style={{ fontWeight: 700, fontSize: '0.78rem', color: '#fff' }}>{language === 'HI' ? 'कुल उत्पादन लागत:' : 'Total Production Cost:'}</span>
+                    <span style={{ fontSize: '1.1rem', fontWeight: 900, color: 'var(--accent-gold)' }}>
+                      ₹{totalProductionCost.toLocaleString('en-IN')}
+                    </span>
+                  </div>
+
+                  {/* Mini Distribution Bar */}
+                  <div style={{ height: '4px', borderRadius: 'var(--radius-full)', background: 'rgba(255,255,255,0.08)', display: 'flex', overflow: 'hidden', marginBottom: '0.2rem' }}>
+                    <div style={{ width: `${matPct}%`, background: 'var(--accent-gold)' }} title={`Material: ${matPct}%`} />
+                    <div style={{ width: `${labPct}%`, background: 'var(--accent-primary)' }} title={`Labour: ${labPct}%`} />
+                    <div style={{ width: `${pkgPct}%`, background: 'var(--info)' }} title={`Packaging: ${pkgPct}%`} />
+                    <div style={{ width: `${othPct}%`, background: 'var(--success)' }} title={`Overhead: ${othPct}%`} />
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.66rem', color: 'var(--text-muted)' }}>
+                    <span>{language === 'HI' ? 'सामग्री' : 'Mat'}: {matPct}%</span>
+                    <span>{language === 'HI' ? 'श्रम' : 'Lab'}: {labPct}%</span>
+                    <span>{language === 'HI' ? 'पैकेजिंग' : 'Pkg'}: {pkgPct}%</span>
+                    <span>{language === 'HI' ? 'अन्य' : 'Oth'}: {othPct}%</span>
+                  </div>
+                </div>
+              </div>
 
           {/* 2. ESTIMATED PRICE RANGE & SUGGESTED PRICE DIRECTLY BELOW INPUT PANEL */}
           <div>

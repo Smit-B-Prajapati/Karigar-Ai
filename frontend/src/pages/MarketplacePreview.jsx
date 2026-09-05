@@ -53,15 +53,14 @@ export default function MarketplacePreview({ addToast }) {
   useEffect(() => {
     async function loadData() {
       setLoading(true);
-      const isDemoAccount = Boolean(user && (user.email === 'ramesh@karigar.in' || user.isDemo));
       const userKey = user?.email || user?.id || '';
 
       try {
         let prodsList = [];
         if (token) {
           const res = await getProducts(token);
-          if (res.success && res.products && res.products.length > 0) {
-            prodsList = res.products;
+          if (res.success && Array.isArray(res.products)) {
+            prodsList = res.products.filter(p => !p.isDemoFallback && !String(p.id || p._id || '').startsWith('fallback_'));
           }
         }
 
@@ -70,15 +69,12 @@ export default function MarketplacePreview({ addToast }) {
           if (cached) {
             try {
               const parsed = JSON.parse(cached);
-              if (Array.isArray(parsed) && parsed.length > 0) {
-                prodsList = parsed;
+              if (Array.isArray(parsed)) {
+                prodsList = parsed.filter(p => !p.isDemoFallback && !String(p.id || p._id || '').startsWith('fallback_'));
+                localStorage.setItem(`karigar_products_${userKey}`, JSON.stringify(prodsList));
               }
             } catch (e) {}
           }
-        }
-
-        if (prodsList.length === 0 && isDemoAccount) {
-          prodsList = mockProducts;
         }
 
         setProducts(prodsList);
@@ -90,15 +86,9 @@ export default function MarketplacePreview({ addToast }) {
         setCurrentProduct(active);
       } catch (err) {
         console.warn('Marketplace preview load error:', err);
-        if (isDemoAccount) {
-          setProducts(mockProducts);
-          setCurrentProduct(mockProducts[0]);
-          setSelectedProductId(mockProducts[0]._id || 'mock-1');
-        } else {
-          setProducts([]);
-          setCurrentProduct(null);
-          setSelectedProductId('');
-        }
+        setProducts([]);
+        setCurrentProduct(null);
+        setSelectedProductId('');
       } finally {
         setLoading(false);
       }

@@ -84,23 +84,28 @@ export default function BusinessAdvisor({ addToast }) {
   useEffect(() => {
     async function loadProducts() {
       setLoadingProducts(true);
-      const isDemoAccount = Boolean(user && (user.email === 'ramesh@karigar.in' || user.isDemo));
       const userKey = user?.email || user?.id || '';
 
       try {
         if (token) {
           const res = await getProducts(token);
-          if (res.success && res.products && res.products.length > 0) {
-            setProducts(res.products);
-            const stateProductId = location.state?.productId;
-            if (stateProductId && res.products.some(p => (p._id || p.id) === stateProductId)) {
-              setSelectedProductId(stateProductId);
-              setActiveProduct(res.products.find(p => (p._id || p.id) === stateProductId));
-            } else {
-              setSelectedProductId(res.products[0]._id || res.products[0].id);
-              setActiveProduct(res.products[0]);
+          if (res.success && Array.isArray(res.products)) {
+            const clean = res.products.filter(p => !p.isDemoFallback && !String(p.id || p._id || '').startsWith('fallback_'));
+            if (clean.length > 0) {
+              setProducts(clean);
+              const stateProductId = location.state?.productId;
+              if (stateProductId && clean.some(p => (p._id || p.id) === stateProductId)) {
+                setSelectedProductId(stateProductId);
+                setActiveProduct(clean.find(p => (p._id || p.id) === stateProductId));
+              } else {
+                setSelectedProductId(clean[0]._id || clean[0].id);
+                setActiveProduct(clean[0]);
+              }
+              if (userKey) {
+                localStorage.setItem(`karigar_products_${userKey}`, JSON.stringify(clean));
+              }
+              return;
             }
-            return;
           }
         }
 
@@ -109,39 +114,28 @@ export default function BusinessAdvisor({ addToast }) {
           if (cached) {
             try {
               const parsed = JSON.parse(cached);
-              if (Array.isArray(parsed) && parsed.length > 0) {
-                setProducts(parsed);
-                setSelectedProductId(parsed[0]._id || parsed[0].id);
-                setActiveProduct(parsed[0]);
-                return;
+              if (Array.isArray(parsed)) {
+                const clean = parsed.filter(p => !p.isDemoFallback && !String(p.id || p._id || '').startsWith('fallback_'));
+                localStorage.setItem(`karigar_products_${userKey}`, JSON.stringify(clean));
+                if (clean.length > 0) {
+                  setProducts(clean);
+                  setSelectedProductId(clean[0]._id || clean[0].id);
+                  setActiveProduct(clean[0]);
+                  return;
+                }
               }
             } catch (e) {}
           }
         }
 
-        // Only fallback to demo items for demo account
-        if (isDemoAccount) {
-          setProducts(mockProducts);
-          const stateProductId = location.state?.productId;
-          const target = mockProducts.find(p => (p._id || p.id) === stateProductId) || mockProducts[0];
-          setSelectedProductId(target._id || target.id);
-          setActiveProduct(target);
-        } else {
-          setProducts([]);
-          setSelectedProductId('');
-          setActiveProduct(null);
-        }
+        setProducts([]);
+        setSelectedProductId('');
+        setActiveProduct(null);
       } catch (err) {
-        console.warn('Could not load user products for advisor, using demo fallback:', err.message);
-        if (isDemoAccount) {
-          setProducts(mockProducts);
-          setSelectedProductId(mockProducts[0]._id || mockProducts[0].id);
-          setActiveProduct(mockProducts[0]);
-        } else {
-          setProducts([]);
-          setSelectedProductId('');
-          setActiveProduct(null);
-        }
+        console.warn('Could not load user products for advisor:', err.message);
+        setProducts([]);
+        setSelectedProductId('');
+        setActiveProduct(null);
       } finally {
         setLoadingProducts(false);
       }

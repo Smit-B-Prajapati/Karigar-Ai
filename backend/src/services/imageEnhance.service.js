@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import sharp from 'sharp';
+import mongoose from 'mongoose';
 import Product from '../models/product.model.js';
 import { extractImageBuffer } from './ai.service.js';
 
@@ -17,19 +18,34 @@ async function callRemoveBgApi(base64Image, rawBuffer) {
     throw new Error('REMOVE_BG_API_KEY is not configured in backend/.env');
   }
 
-  const response = await fetch('https://api.remove.bg/v1.0/removebg', {
-    method: 'POST',
-    headers: {
-      'X-Api-Key': config.removeBgApiKey.trim(),
-      'Content-Type': 'application/json',
-      'Accept': 'application/json, image/png',
-    },
-    body: JSON.stringify({
-      image_file_b64: base64Image,
-      size: 'auto',
-      format: 'png', // Returns transparent PNG with background removed
-    }),
-  });
+  // Helper to send Remove.bg request with specified segmentation type
+  const sendRequest = async (segmentType) => {
+    return await fetch('https://api.remove.bg/v1.0/removebg', {
+      method: 'POST',
+      headers: {
+        'X-Api-Key': config.removeBgApiKey.trim(),
+        'Content-Type': 'application/json',
+        'Accept': 'application/json, image/png',
+      },
+      body: JSON.stringify({
+        image_file_b64: base64Image,
+        size: 'auto',
+        type: segmentType, // 'product' prioritizes craft/merchandise over hands/people
+        crop: true,
+        crop_margin: '20px',
+        format: 'png',
+      }),
+    });
+  };
+
+  // 1. First attempt with 'product' mode for optimal craft isolation
+  let response = await sendRequest('product');
+
+  // 2. If 'product' mode rejected with 400, retry with 'auto' mode
+  if (!response.ok && response.status === 400) {
+    console.warn('Remove.bg product mode returned 400, retrying with auto mode...');
+    response = await sendRequest('auto');
+  }
 
   if (!response.ok) {
     const errText = await response.text();
@@ -91,13 +107,15 @@ async function callClipdropApi(rawBuffer) {
  */
 async function smartStudioLocalEnhance(inputBuffer) {
   try {
-    // 1. Read metadata
-    const metadata = await sharp(inputBuffer).metadata();
+    // 1. Read metadata with auto-rotation for mobile portrait/landscape photos
+    const oriented = sharp(inputBuffer).rotate();
+    const metadata = await oriented.metadata();
     const width = metadata.width || 800;
     const height = metadata.height || 800;
 
     // 2. Normalize, boost vibrance, and sharpen craft item
     const enhancedSubject = await sharp(inputBuffer)
+      .rotate()
       .resize(840, 840, { 
         fit: 'inside', 
         withoutEnlargement: false,
@@ -130,7 +148,7 @@ async function smartStudioLocalEnhance(inputBuffer) {
         },
       ])
       .jpeg({
-        quality: 95,
+        quality: 92,
         progressive: true,
       })
       .toBuffer();
@@ -140,6 +158,7 @@ async function smartStudioLocalEnhance(inputBuffer) {
     console.error('smartStudioLocalEnhance error:', err.message);
     // Safe direct output
     return await sharp(inputBuffer)
+      .rotate()
       .resize(1000, 1000, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 1 } })
       .jpeg({ quality: 90 })
       .toBuffer();
@@ -310,7 +329,7 @@ export async function enhanceProductPhoto(imageInput, productId = 'temp', option
   const enhancedBase64 = `data:image/jpeg;base64,${finalCompositeBuffer.toString('base64')}`;
 
   // 7. Update Product model in MongoDB if productId is valid
-  if (productId && productId !== 'temp' && !productId.startsWith('temp')) {
+  if (productId && mongoose.Types.ObjectId.isValid(productId)) {
     try {
       const productDoc = await Product.findById(productId);
       if (productDoc) {

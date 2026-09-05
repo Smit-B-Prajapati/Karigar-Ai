@@ -41,10 +41,11 @@ export default function HomeDashboard({ addToast }) {
     try {
       if (token) {
         const res = await getProducts(token);
-        if (res.success && res.products && res.products.length > 0) {
-          setProducts(res.products);
+        if (res.success && Array.isArray(res.products)) {
+          const clean = res.products.filter(p => !p.isDemoFallback && !String(p.id || p._id || '').startsWith('fallback_'));
+          setProducts(clean);
           if (userKey) {
-            localStorage.setItem(`karigar_products_${userKey}`, JSON.stringify(res.products));
+            localStorage.setItem(`karigar_products_${userKey}`, JSON.stringify(clean));
           }
           return;
         }
@@ -56,8 +57,10 @@ export default function HomeDashboard({ addToast }) {
         if (cached) {
           try {
             const parsed = JSON.parse(cached);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              setProducts(parsed);
+            if (Array.isArray(parsed)) {
+              const clean = parsed.filter(p => !p.isDemoFallback && !String(p.id || p._id || '').startsWith('fallback_'));
+              localStorage.setItem(`karigar_products_${userKey}`, JSON.stringify(clean));
+              setProducts(clean);
               return;
             }
           } catch (e) {}
@@ -72,14 +75,15 @@ export default function HomeDashboard({ addToast }) {
         if (cached) {
           try {
             const parsed = JSON.parse(cached);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              setProducts(parsed);
+            if (Array.isArray(parsed)) {
+              const clean = parsed.filter(p => !p.isDemoFallback && !String(p.id || p._id || '').startsWith('fallback_'));
+              localStorage.setItem(`karigar_products_${userKey}`, JSON.stringify(clean));
+              setProducts(clean);
               return;
             }
           } catch (e) {}
         }
       }
-      setError('Could not connect to database. Displaying offline mode.');
       setProducts([]);
     } finally {
       setLoading(false);
@@ -96,8 +100,17 @@ export default function HomeDashboard({ addToast }) {
     try {
       const res = await deleteProduct(id, token);
       if (res.success) {
-        if (addToast) addToast('Product deleted from database', 'success');
-        setProducts(prev => prev.filter(p => p._id !== id));
+        if (addToast) addToast('Product deleted successfully', 'success');
+        const userKey = user?.email || user?.id || '';
+        setProducts(prev => {
+          const next = prev.filter(p => (p._id || p.id) !== id && p._id !== id && p.id !== id);
+          if (userKey) {
+            try {
+              localStorage.setItem(`karigar_products_${userKey}`, JSON.stringify(next));
+            } catch (e) {}
+          }
+          return next;
+        });
       }
     } catch (err) {
       if (addToast) addToast(err.message || 'Failed to delete product', 'error');
@@ -157,53 +170,31 @@ export default function HomeDashboard({ addToast }) {
   return (
     <div className="main-container" style={{ maxWidth: '1120px' }}>
       
-      {/* Hero Welcome Banner */}
-      <div style={{
-        textAlign: 'center',
-        padding: '3rem 1.5rem',
-        borderRadius: 'var(--radius-lg)',
-        background: 'linear-gradient(135deg, rgba(184, 134, 155, 0.14) 0%, rgba(246, 196, 146, 0.18) 100%)',
-        border: '1.5px solid rgba(184, 134, 155, 0.3)',
-        boxShadow: '0 8px 30px rgba(70, 45, 80, 0.07)',
-        marginBottom: '2rem'
-      }}>
-        <div style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '0.4rem',
-          padding: '0.35rem 0.9rem',
-          borderRadius: 'var(--radius-full)',
-          background: 'rgba(184, 134, 155, 0.15)',
-          border: '1px solid rgba(184, 134, 155, 0.35)',
-          color: '#8e4868',
-          fontSize: '0.8rem',
-          fontWeight: 800,
-          textTransform: 'uppercase',
-          letterSpacing: '0.06em',
-          marginBottom: '1rem'
-        }}>
-          <Sparkles size={14} color="var(--accent-gold)" />
+      {/* Hero Welcome Banner - Compact, Sleek & Mobile Friendly */}
+      <div className="home-hero-banner">
+        <div className="home-hero-badge">
+          <Sparkles size={13} color="var(--accent-gold)" />
           <span>{t('home.platformBadge', 'AI PLATFORM FOR ARTISANS')}</span>
         </div>
 
-        <h1 style={{ fontSize: '2.4rem', fontWeight: 900, marginBottom: '0.6rem', color: 'var(--text-primary)' }}>
+        <h1 className="home-hero-title">
           {t('home.welcome', 'Welcome back')}, <span className="gradient-text">{user?.name || 'Karigar'}</span>! 🙏
         </h1>
-        <p style={{ fontSize: '1.05rem', color: 'var(--text-secondary)', maxWidth: '640px', margin: '0 auto 1.75rem auto', lineHeight: '1.6' }}>
+        <p className="home-hero-subtitle">
           {t('home.welcomeSubtitle', 'Turn your handmade products into market-ready listings with AI.')}
         </p>
 
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+        <div className="home-hero-actions">
           <Button 
             onClick={() => navigate('/add-product')}
-            icon={<Plus size={18} />}
+            icon={<Plus size={16} />}
             variant="primary"
           >
             {t('home.addNewCraft', 'Add New Product')}
           </Button>
           <Button 
             onClick={() => navigate('/ai-market-studio')}
-            icon={<Sparkles size={18} color="var(--accent-gold)" />}
+            icon={<Sparkles size={16} color="var(--accent-gold)" />}
             variant="secondary"
           >
             {t('home.openAiStudio', 'Open AI Market Studio')}
@@ -211,182 +202,132 @@ export default function HomeDashboard({ addToast }) {
         </div>
       </div>
 
-      {/* Interactive & Clickable Statistics Cards */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-        gap: '1.25rem',
-        marginBottom: '2.5rem'
-      }}>
+      {/* Interactive & Clickable Statistics Cards - Responsive 4-col / 2-col Grid */}
+      <div className="home-stats-grid">
         
         {/* Stat Card 1: TOTAL PRODUCTS */}
         <button
           type="button"
           onClick={() => setActiveFilter('all')}
+          className="home-stat-btn"
           style={{
             background: activeFilter === 'all' ? 'rgba(184, 134, 155, 0.16)' : 'var(--bg-card)',
             border: activeFilter === 'all' ? '2px solid var(--accent-primary)' : '1px solid var(--border-color)',
             boxShadow: activeFilter === 'all' ? '0 8px 24px rgba(184, 134, 155, 0.2)' : '0 2px 10px rgba(70, 45, 80, 0.04)',
-            borderRadius: 'var(--radius-md)',
-            padding: '1.25rem',
-            textAlign: 'left',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
             transform: activeFilter === 'all' ? 'translateY(-2px)' : 'none',
-            display: 'block',
-            width: '100%',
-            position: 'relative',
-            overflow: 'hidden'
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <div style={{ padding: '0.8rem', borderRadius: 'var(--radius-sm)', background: 'rgba(184, 134, 155, 0.15)', color: 'var(--accent-primary)' }}>
-              <Package size={24} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+            <div className="home-stat-icon-box" style={{ background: 'rgba(184, 134, 155, 0.15)', color: 'var(--accent-primary)' }}>
+              <Package size={16} />
             </div>
             <div>
-              <p style={{ fontSize: '0.82rem', color: activeFilter === 'all' ? 'var(--accent-primary)' : 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', margin: 0 }}>
+              <p className="home-stat-label" style={{ color: activeFilter === 'all' ? 'var(--accent-primary)' : 'var(--text-muted)' }}>
                 {t('home.totalProducts', 'TOTAL PRODUCTS')}
               </p>
-              <h3 style={{ fontSize: '1.8rem', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>
+              <h3 className="home-stat-value">
                 {totalProducts}
               </h3>
             </div>
           </div>
-          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.75rem', marginBottom: 0 }}>
-            {t('home.allProducts', 'All Products')} ➔
-          </p>
         </button>
 
         {/* Stat Card 2: PUBLISHED */}
         <button
           type="button"
           onClick={() => setActiveFilter('published')}
+          className="home-stat-btn"
           style={{
             background: activeFilter === 'published' ? 'rgba(13, 148, 136, 0.14)' : 'var(--bg-card)',
             border: activeFilter === 'published' ? '2px solid var(--success)' : '1px solid var(--border-color)',
             boxShadow: activeFilter === 'published' ? '0 8px 24px rgba(13, 148, 136, 0.2)' : '0 2px 10px rgba(70, 45, 80, 0.04)',
-            borderRadius: 'var(--radius-md)',
-            padding: '1.25rem',
-            textAlign: 'left',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
             transform: activeFilter === 'published' ? 'translateY(-2px)' : 'none',
-            display: 'block',
-            width: '100%',
-            position: 'relative',
-            overflow: 'hidden'
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <div style={{ padding: '0.8rem', borderRadius: 'var(--radius-sm)', background: 'rgba(13, 148, 136, 0.12)', color: 'var(--success)' }}>
-              <CheckCircle2 size={24} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+            <div className="home-stat-icon-box" style={{ background: 'rgba(13, 148, 136, 0.12)', color: 'var(--success)' }}>
+              <CheckCircle2 size={16} />
             </div>
             <div>
-              <p style={{ fontSize: '0.82rem', color: activeFilter === 'published' ? 'var(--success)' : 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', margin: 0 }}>
+              <p className="home-stat-label" style={{ color: activeFilter === 'published' ? 'var(--success)' : 'var(--text-muted)' }}>
                 {t('home.publishedCount', 'PUBLISHED')}
               </p>
-              <h3 style={{ fontSize: '1.8rem', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>
+              <h3 className="home-stat-value">
                 {publishedProducts.length}
               </h3>
             </div>
           </div>
-          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.75rem', marginBottom: 0 }}>
-            {t('home.publishedProducts', 'Published Products')} ➔
-          </p>
         </button>
 
         {/* Stat Card 3: DRAFTS */}
         <button
           type="button"
           onClick={() => setActiveFilter('drafts')}
+          className="home-stat-btn"
           style={{
             background: activeFilter === 'drafts' ? 'rgba(217, 119, 6, 0.14)' : 'var(--bg-card)',
             border: activeFilter === 'drafts' ? '2px solid var(--warning)' : '1px solid var(--border-color)',
             boxShadow: activeFilter === 'drafts' ? '0 8px 24px rgba(217, 119, 6, 0.2)' : '0 2px 10px rgba(70, 45, 80, 0.04)',
-            borderRadius: 'var(--radius-md)',
-            padding: '1.25rem',
-            textAlign: 'left',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
             transform: activeFilter === 'drafts' ? 'translateY(-2px)' : 'none',
-            display: 'block',
-            width: '100%',
-            position: 'relative',
-            overflow: 'hidden'
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <div style={{ padding: '0.8rem', borderRadius: 'var(--radius-sm)', background: 'rgba(217, 119, 6, 0.12)', color: 'var(--warning)' }}>
-              <FileText size={24} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+            <div className="home-stat-icon-box" style={{ background: 'rgba(217, 119, 6, 0.12)', color: 'var(--warning)' }}>
+              <FileText size={16} />
             </div>
             <div>
-              <p style={{ fontSize: '0.82rem', color: activeFilter === 'drafts' ? 'var(--warning)' : 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', margin: 0 }}>
+              <p className="home-stat-label" style={{ color: activeFilter === 'drafts' ? 'var(--warning)' : 'var(--text-muted)' }}>
                 {t('home.draftCount', 'DRAFTS')}
               </p>
-              <h3 style={{ fontSize: '1.8rem', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>
+              <h3 className="home-stat-value">
                 {draftProducts.length}
               </h3>
             </div>
           </div>
-          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.75rem', marginBottom: 0 }}>
-            {t('home.draftProducts', 'Draft Products')} ➔
-          </p>
         </button>
 
         {/* Stat Card 4: CATALOGUE VALUE */}
         <button
           type="button"
           onClick={() => setActiveFilter('value')}
+          className="home-stat-btn"
           style={{
             background: activeFilter === 'value' ? 'rgba(232, 151, 88, 0.16)' : 'var(--bg-card)',
             border: activeFilter === 'value' ? '2px solid var(--accent-gold)' : '1px solid var(--border-color)',
             boxShadow: activeFilter === 'value' ? '0 8px 24px rgba(232, 151, 88, 0.2)' : '0 2px 10px rgba(70, 45, 80, 0.04)',
-            borderRadius: 'var(--radius-md)',
-            padding: '1.25rem',
-            textAlign: 'left',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
             transform: activeFilter === 'value' ? 'translateY(-2px)' : 'none',
-            display: 'block',
-            width: '100%',
-            position: 'relative',
-            overflow: 'hidden'
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <div style={{ padding: '0.8rem', borderRadius: 'var(--radius-sm)', background: 'rgba(232, 151, 88, 0.15)', color: 'var(--accent-gold)' }}>
-              <DollarSign size={24} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+            <div className="home-stat-icon-box" style={{ background: 'rgba(232, 151, 88, 0.15)', color: 'var(--accent-gold)' }}>
+              <DollarSign size={16} />
             </div>
             <div>
-              <p style={{ fontSize: '0.82rem', color: activeFilter === 'value' ? 'var(--accent-gold)' : 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', margin: 0 }}>
+              <p className="home-stat-label" style={{ color: activeFilter === 'value' ? 'var(--accent-gold)' : 'var(--text-muted)' }}>
                 {t('home.totalValue', 'CATALOGUE VALUE')}
               </p>
-              <h3 style={{ fontSize: '1.8rem', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>
+              <h3 className="home-stat-value">
                 ₹ {totalCatalogueValue.toLocaleString('en-IN')}
               </h3>
             </div>
           </div>
-          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.75rem', marginBottom: 0 }}>
-            {t('home.totalValue', 'Catalogue Value')} ➔
-          </p>
         </button>
       </div>
 
       {/* Dynamic Filtered Products Display Section */}
-
       <div>
         <Card 
           title={filterMeta.title}
-          subtitle={filterMeta.subtitle}
+          subtitle={null}
           action={
-            <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
               {activeFilter !== 'all' && (
                 <Button onClick={() => setActiveFilter('all')} variant="secondary" size="sm">
                   {t('home.allProducts', 'Show All')} ({totalProducts})
                 </Button>
               )}
               <Button onClick={() => navigate('/catalogue')} variant="outline" size="sm">
-                {t('home.viewAll', 'Open Full Catalogue ➔')}
+                {t('home.viewAll', 'Open Catalogue ➔')}
               </Button>
             </div>
           }
@@ -401,70 +342,48 @@ export default function HomeDashboard({ addToast }) {
               onAction={() => navigate('/add-product')}
             />
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
               {filteredProducts.map(p => (
                 <div 
                   key={p._id || p.id}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '1rem 1.25rem',
-                    borderRadius: 'var(--radius-md)',
-                    background: 'rgba(255, 255, 255, 0.02)',
-                    border: '1px solid var(--border-color)',
-                    flexWrap: 'wrap',
-                    gap: '1rem',
-                    transition: 'all 0.2s ease'
-                  }}
+                  className="home-product-row"
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '1.1rem', minWidth: '240px' }}>
+                  <div className="home-product-info-wrap">
                     {p.enhancedImage || p.originalImage || p.image ? (
-                      <div style={{
-                        width: '64px',
-                        height: '64px',
-                        borderRadius: 'var(--radius-sm)',
-                        overflow: 'hidden',
-                        background: '#fff',
-                        border: '1px solid var(--border-color)',
-                        flexShrink: 0,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}>
+                      <div className="home-product-thumb">
                         <img 
                           src={p.enhancedImage || p.originalImage || p.image} 
                           alt={p.name || p.title} 
-                          style={{ width: '100%', height: '100%', objectFit: 'contain' }} 
                         />
                       </div>
                     ) : (
-                      <div style={{ width: '64px', height: '64px', borderRadius: 'var(--radius-sm)', background: 'rgba(230,81,0,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent-terracotta)', flexShrink: 0 }}>
-                        <Package size={28} />
+                      <div className="home-product-thumb" style={{ background: 'rgba(230,81,0,0.12)', color: 'var(--accent-terracotta)' }}>
+                        <Package size={20} />
                       </div>
                     )}
-                    <div>
-                      <h4 style={{ fontSize: '1.05rem', fontWeight: 800, marginBottom: '0.2rem' }}>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <h4 className="home-product-title">
                         {p.name || p.title}
                       </h4>
-                      <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: 0 }}>
-                        {translateCategory(p.category)} • {p.craftType || p.material || 'Artisan Craft'}
+                      <p className="home-product-meta">
+                        {translateCategory(p.category)} {p.craftType ? `• ${p.craftType}` : ''}
                       </p>
-                      <div style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--accent-gold)', marginTop: '0.25rem' }}>
+                      <div className="home-product-price">
                         ₹ {p.price ? Number(p.price).toLocaleString('en-IN') : '0'}
                       </div>
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                  <div className="home-product-actions">
                     <span style={{
-                      fontSize: '0.78rem',
-                      padding: '0.25rem 0.75rem',
+                      fontSize: '0.7rem',
+                      padding: '0.2rem 0.55rem',
                       borderRadius: 'var(--radius-full)',
                       background: p.status === 'Published' || p.status === 'Market-Ready' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
                       color: p.status === 'Published' || p.status === 'Market-Ready' ? 'var(--success)' : 'var(--warning)',
-                      border: `1px solid ${p.status === 'Published' || p.status === 'Market-Ready' ? 'rgba(16, 185, 129, 0.4)' : 'rgba(245, 158, 11, 0.4)'}`,
-                      fontWeight: 700
+                      border: `1px solid ${p.status === 'Published' || p.status === 'Market-Ready' ? 'rgba(16, 185, 129, 0.35)' : 'rgba(245, 158, 11, 0.35)'}`,
+                      fontWeight: 700,
+                      whiteSpace: 'nowrap'
                     }}>
                       {p.status === 'Published' || p.status === 'Market-Ready' ? `✓ ${translateStatus('Published')}` : `✎ ${translateStatus('Draft')}`}
                     </span>
@@ -473,7 +392,7 @@ export default function HomeDashboard({ addToast }) {
                       onClick={() => navigate('/ai-market-studio', { state: { productId: p._id || p.id } })}
                       variant="secondary"
                       size="sm"
-                      icon={<Wand2 size={14} color="var(--accent-gold)" />}
+                      icon={<Wand2 size={13} color="var(--accent-gold)" />}
                     >
                       {t('home.actionEnhance', 'AI Studio')}
                     </Button>
@@ -482,16 +401,16 @@ export default function HomeDashboard({ addToast }) {
                       onClick={() => navigate(`/catalogue/${p._id || p.id}`)} 
                       variant="outline" 
                       size="sm"
-                      icon={<Eye size={14} />}
+                      icon={<Eye size={13} />}
                     >
-                      {t('home.actionView', 'View / Edit')}
+                      {t('home.actionView', 'View')}
                     </Button>
 
                     <Button 
                       onClick={() => handleDeleteProduct(p._id || p.id, p.name || p.title)} 
                       variant="danger" 
                       size="sm"
-                      icon={<Trash2 size={14} />}
+                      icon={<Trash2 size={13} />}
                     />
                   </div>
                 </div>

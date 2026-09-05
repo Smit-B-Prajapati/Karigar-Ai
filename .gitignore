@@ -34,3 +34,12 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+
+# Local database & temp files
+test_db/
+**/test_db/
+*.wt
+mongod.lock
+journal/
+uploads/
+**/uploads/

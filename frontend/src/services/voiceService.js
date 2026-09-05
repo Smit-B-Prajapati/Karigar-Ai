@@ -23,27 +23,51 @@ export function createSpeechRecognizer(language = 'hi-IN', callbacks = {}) {
 
   recognition.continuous = true;
   recognition.interimResults = true;
-  recognition.lang = language;
+  recognition.lang = language || 'hi-IN';
   recognition.maxAlternatives = 1;
 
   if (callbacks.onStart) recognition.onstart = callbacks.onStart;
-  if (callbacks.onEnd) recognition.onend = callbacks.onEnd;
+
+  recognition.onend = (e) => {
+    if (callbacks.shouldContinue && callbacks.shouldContinue()) {
+      // Debounced auto-restart for mobile browsers when pausing between words
+      setTimeout(() => {
+        try {
+          if (callbacks.shouldContinue && callbacks.shouldContinue()) {
+            recognition.start();
+          }
+        } catch (err) {
+          console.warn('[SpeechRecognition auto-restart note]:', err);
+        }
+      }, 150);
+    } else if (callbacks.onEnd) {
+      callbacks.onEnd(e);
+    }
+  };
   
   if (callbacks.onResult) {
     recognition.onresult = (event) => {
       let finalTranscript = '';
       let interimTranscript = '';
 
-      for (let i = event.resultIndex; i < event.results.length; i++) {
+      // Direct calculation from event.results ensures zero duplication and handles Gujarati & Hindi accurately
+      for (let i = 0; i < event.results.length; i++) {
         const transcriptChunk = event.results[i][0].transcript;
         if (event.results[i].isFinal) {
-          finalTranscript += transcriptChunk;
+          finalTranscript += transcriptChunk + ' ';
         } else {
           interimTranscript += transcriptChunk;
         }
       }
 
-      callbacks.onResult({ finalTranscript, interimTranscript, rawEvent: event });
+      const combined = (finalTranscript + interimTranscript).trim();
+
+      callbacks.onResult({
+        finalTranscript: finalTranscript.trim(),
+        interimTranscript: interimTranscript.trim(),
+        transcript: combined,
+        rawEvent: event
+      });
     };
   }
 
@@ -66,27 +90,38 @@ export function createSpeechRecognizer(language = 'hi-IN', callbacks = {}) {
  * @returns {Promise<{ success: boolean, transcript: string, language: string }>}
  */
 export async function sendAudioToBackendSTT(audioBlobOrBase64, language, token) {
-  let audioBase64 = audioBlobOrBase64;
+  try {
+    let audioBase64 = audioBlobOrBase64;
 
-  if (audioBlobOrBase64 instanceof Blob) {
-    audioBase64 = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(audioBlobOrBase64);
+    if (audioBlobOrBase64 instanceof Blob) {
+      audioBase64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(audioBlobOrBase64);
+      });
+    }
+
+    const res = await apiRequest('/ai/speech-to-text', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      timeout: 2000,
+      body: JSON.stringify({
+        audio: audioBase64,
+        language: language || 'hi-IN',
+      }),
     });
+    return res;
+  } catch (err) {
+    console.warn('Backend STT unavailable or timed out:', err.message);
+    return {
+      success: false,
+      transcript: '',
+      message: err.message,
+    };
   }
-
-  return await apiRequest('/ai/speech-to-text', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({
-      audio: audioBase64,
-      language: language || 'hi-IN',
-    }),
-  });
 }
 
 /**
@@ -457,6 +492,7 @@ export async function parseVoiceTranscript(transcript, language = 'hi-IN', token
       headers: {
         Authorization: `Bearer ${token}`,
       },
+      timeout: 2000,
       body: JSON.stringify({
         transcript: transcript.trim(),
         language

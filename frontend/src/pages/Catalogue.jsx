@@ -72,15 +72,15 @@ export default function Catalogue({ addToast }) {
     setLoading(true);
     setError(null);
     const userKey = user?.email || user?.id || '';
-    const isDemoAccount = Boolean(user && (user.email === 'ramesh@karigar.in' || user.isDemo));
 
     try {
       if (token) {
         const res = await getProducts(token);
-        if (res.success && res.products && res.products.length > 0) {
-          setProducts(res.products);
+        if (res.success && Array.isArray(res.products)) {
+          const clean = res.products.filter(p => !p.isDemoFallback && !String(p.id || p._id || '').startsWith('fallback_'));
+          setProducts(clean);
           if (userKey) {
-            localStorage.setItem(`karigar_products_${userKey}`, JSON.stringify(res.products));
+            localStorage.setItem(`karigar_products_${userKey}`, JSON.stringify(clean));
           }
           return;
         }
@@ -92,20 +92,17 @@ export default function Catalogue({ addToast }) {
         if (cached) {
           try {
             const parsed = JSON.parse(cached);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              setProducts(parsed);
+            if (Array.isArray(parsed)) {
+              const clean = parsed.filter(p => !p.isDemoFallback && !String(p.id || p._id || '').startsWith('fallback_'));
+              localStorage.setItem(`karigar_products_${userKey}`, JSON.stringify(clean));
+              setProducts(clean);
               return;
             }
           } catch (e) {}
         }
       }
 
-      // Only show mockProducts for demo login; new/other accounts start with their own empty catalogue
-      if (isDemoAccount) {
-        setProducts(mockProducts);
-      } else {
-        setProducts([]);
-      }
+      setProducts([]);
     } catch (err) {
       console.warn('Fetch products fallback:', err);
       if (userKey) {
@@ -113,18 +110,16 @@ export default function Catalogue({ addToast }) {
         if (cached) {
           try {
             const parsed = JSON.parse(cached);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              setProducts(parsed);
+            if (Array.isArray(parsed)) {
+              const clean = parsed.filter(p => !p.isDemoFallback && !String(p.id || p._id || '').startsWith('fallback_'));
+              localStorage.setItem(`karigar_products_${userKey}`, JSON.stringify(clean));
+              setProducts(clean);
               return;
             }
           } catch (e) {}
         }
       }
-      if (isDemoAccount) {
-        setProducts(mockProducts);
-      } else {
-        setProducts([]);
-      }
+      setProducts([]);
     } finally {
       setLoading(false);
     }
@@ -162,15 +157,19 @@ export default function Catalogue({ addToast }) {
     if (!window.confirm(`Are you sure you want to delete "${name}" from your catalogue?`)) return;
 
     try {
-      if (id && !id.startsWith('mock') && token) {
-        const res = await deleteProduct(id, token);
-        if (res.success) {
-          if (addToast) addToast('Product deleted from database', 'success');
-          setProducts(prev => prev.filter(p => p._id !== id));
-        }
-      } else {
-        setProducts(prev => prev.filter(p => (p._id || p.id) !== id));
-        if (addToast) addToast('Product removed', 'info');
+      const res = await deleteProduct(id, token);
+      if (res.success) {
+        if (addToast) addToast('Product deleted successfully', 'success');
+        const userKey = user?.email || user?.id || '';
+        setProducts(prev => {
+          const next = prev.filter(p => (p._id || p.id) !== id && p._id !== id && p.id !== id);
+          if (userKey) {
+            try {
+              localStorage.setItem(`karigar_products_${userKey}`, JSON.stringify(next));
+            } catch (e) {}
+          }
+          return next;
+        });
       }
     } catch (err) {
       if (addToast) addToast(err.message || 'Failed to delete product', 'error');

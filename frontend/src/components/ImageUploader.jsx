@@ -15,10 +15,11 @@ import {
   Maximize2
 } from 'lucide-react';
 import Button from './Button.jsx';
+import { optimizeImageForUpload } from '../utils/imageOptimizer.js';
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp'];
-const MAX_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
+const MAX_SIZE_BYTES = 25 * 1024 * 1024; // 25MB input limit, auto-compressed to ~250KB
 
 export default function ImageUploader({
   value,
@@ -35,6 +36,7 @@ export default function ImageUploader({
   const [validationError, setValidationError] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
   const [isCameraActive, setIsCameraActive] = useState(false);
+  const [isOptimizing, setIsOptimizing] = useState(false);
   const [activePipelineTab, setActivePipelineTab] = useState('original'); // 'original' | 'processing' | 'enhanced'
   const [studioPreset, setStudioPreset] = useState('Warm Heritage Glow');
 
@@ -78,10 +80,10 @@ export default function ImageUploader({
       return { valid: false, message: msg };
     }
 
-    // Size validation (Max 5MB)
+    // Size validation (Max 25MB before client-side optimization)
     if (file.size > MAX_SIZE_BYTES) {
       const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
-      const msg = `File is too large (${sizeMB} MB). Maximum allowed image size is 5 MB.`;
+      const msg = `File is too large (${sizeMB} MB). Maximum allowed image size is 25 MB.`;
       setValidationError(msg);
       if (addToast) addToast(msg, 'error');
       return { valid: false, message: msg };
@@ -90,34 +92,64 @@ export default function ImageUploader({
     return { valid: true };
   };
 
-  const handleSelectedFile = (file) => {
+  const handleSelectedFile = async (file) => {
     const validation = validateFile(file);
     if (!validation.valid) {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const base64Data = e.target.result;
-      setPreviewUrl(base64Data);
+    try {
+      setIsOptimizing(true);
+      // Downscale and compress mobile camera photos to ~150-300KB (max 1200px)
+      const optimized = await optimizeImageForUpload(file, { maxDimension: 1200, quality: 0.85 });
+
+      const finalSizeKb = (optimized.sizeBytes / 1024).toFixed(1);
+      const originalSizeMb = (file.size / (1024 * 1024)).toFixed(2);
+
+      setPreviewUrl(optimized.base64);
       setFileDetails({
         name: file.name,
-        size: (file.size / 1024).toFixed(1) + ' KB',
-        type: file.type || 'image/jpeg',
-        rawFile: file,
+        size: `${finalSizeKb} KB (optimized from ${originalSizeMb} MB)`,
+        type: 'image/jpeg',
+        rawFile: optimized.file,
       });
 
       if (onChange) {
-        onChange(base64Data, file);
+        onChange(optimized.base64, optimized.file);
       }
       if (onFileSelect) {
-        onFileSelect(file, base64Data);
+        onFileSelect(optimized.file, optimized.base64);
       }
       if (addToast) {
-        addToast(`Photo "${file.name}" loaded and validated successfully!`, 'success');
+        addToast(`Photo loaded & optimized for studio enhancement! (${finalSizeKb} KB)`, 'success');
       }
-    };
-    reader.readAsDataURL(file);
+    } catch (optErr) {
+      console.warn('Image optimization fallback:', optErr);
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const base64Data = e.target.result;
+        setPreviewUrl(base64Data);
+        setFileDetails({
+          name: file.name,
+          size: (file.size / 1024).toFixed(1) + ' KB',
+          type: file.type || 'image/jpeg',
+          rawFile: file,
+        });
+
+        if (onChange) {
+          onChange(base64Data, file);
+        }
+        if (onFileSelect) {
+          onFileSelect(file, base64Data);
+        }
+        if (addToast) {
+          addToast(`Photo "${file.name}" loaded successfully!`, 'success');
+        }
+      };
+      reader.readAsDataURL(file);
+    } finally {
+      setIsOptimizing(false);
+    }
   };
 
   const handleFileChange = (e) => {
@@ -346,6 +378,7 @@ export default function ImageUploader({
 
       {/* Main Upload Dropzone or Image Preview */}
       {!previewUrl ? (
+        <>
         <div
           onDrop={handleDrop}
           onDragOver={handleDragOver}
@@ -421,6 +454,36 @@ export default function ImageUploader({
             <span>Max size: 5 MB</span>
           </div>
         </div>
+
+        {/* Artisan Studio Photography Guide */}
+        <div
+          style={{
+            marginTop: '1rem',
+            padding: '0.85rem 1.1rem',
+            borderRadius: 'var(--radius-sm)',
+            background: 'rgba(255, 183, 3, 0.08)',
+            border: '1px solid rgba(255, 183, 3, 0.25)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.45rem',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 800, fontSize: '0.88rem', color: 'var(--accent-gold)' }}>
+            <Sparkles size={17} />
+            <span>📸 Pro-Tip for 100% Clean Studio Cutouts:</span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.5rem', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+              <span style={{ color: 'var(--success)', fontWeight: 800 }}>✓</span>
+              <span>Place craft flat on a <strong>table, desk, or surface</strong></span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+              <span style={{ color: 'var(--warning)', fontWeight: 800 }}>✗</span>
+              <span>Avoid holding in hands/palm so fingers aren't captured</span>
+            </div>
+          </div>
+        </div>
+      </>
       ) : (
         /* Image Preview & Management Card */
         <div

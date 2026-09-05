@@ -66,18 +66,23 @@ export default function AiCatalogue({ addToast }) {
   useEffect(() => {
     async function loadProducts() {
       setLoading(true);
-      const isDemoAccount = Boolean(user && (user.email === 'ramesh@karigar.in' || user.isDemo));
       const userKey = user?.email || user?.id || '';
 
       try {
         if (token) {
           const res = await getProducts(token);
-          if (res.success && res.products && res.products.length > 0) {
-            setProducts(res.products);
-            const first = res.products[0];
-            setSelectedProductId(first._id);
-            populateProductDetails(first);
-            return;
+          if (res.success && Array.isArray(res.products)) {
+            const clean = res.products.filter(p => !p.isDemoFallback && !String(p.id || p._id || '').startsWith('fallback_'));
+            if (clean.length > 0) {
+              setProducts(clean);
+              const first = clean[0];
+              setSelectedProductId(first._id || first.id);
+              populateProductDetails(first);
+              if (userKey) {
+                localStorage.setItem(`karigar_products_${userKey}`, JSON.stringify(clean));
+              }
+              return;
+            }
           }
         }
 
@@ -86,36 +91,28 @@ export default function AiCatalogue({ addToast }) {
           if (cached) {
             try {
               const parsed = JSON.parse(cached);
-              if (Array.isArray(parsed) && parsed.length > 0) {
-                setProducts(parsed);
-                setSelectedProductId(parsed[0]._id || parsed[0].id);
-                populateProductDetails(parsed[0]);
-                return;
+              if (Array.isArray(parsed)) {
+                const clean = parsed.filter(p => !p.isDemoFallback && !String(p.id || p._id || '').startsWith('fallback_'));
+                localStorage.setItem(`karigar_products_${userKey}`, JSON.stringify(clean));
+                if (clean.length > 0) {
+                  setProducts(clean);
+                  setSelectedProductId(clean[0]._id || clean[0].id);
+                  populateProductDetails(clean[0]);
+                  return;
+                }
               }
             } catch (e) {}
           }
         }
 
-        if (isDemoAccount) {
-          setProducts(mockProducts);
-          setSelectedProductId(mockProducts[0]._id || 'mock-1');
-          populateProductDetails(mockProducts[0]);
-        } else {
-          setProducts([]);
-          setSelectedProductId('');
-          setCurrentProduct(null);
-        }
+        setProducts([]);
+        setSelectedProductId('');
+        setCurrentProduct(null);
       } catch (err) {
         console.warn('Load products fallback:', err);
-        if (isDemoAccount) {
-          setProducts(mockProducts);
-          setSelectedProductId(mockProducts[0]._id || 'mock-1');
-          populateProductDetails(mockProducts[0]);
-        } else {
-          setProducts([]);
-          setSelectedProductId('');
-          setCurrentProduct(null);
-        }
+        setProducts([]);
+        setSelectedProductId('');
+        setCurrentProduct(null);
       } finally {
         setLoading(false);
       }

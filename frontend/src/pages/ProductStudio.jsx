@@ -68,19 +68,25 @@ export default function ProductStudio({ addToast }) {
   useEffect(() => {
     async function loadArtisanProducts() {
       setLoading(true);
-      const isDemoAccount = Boolean(user && (user.email === 'ramesh@karigar.in' || user.isDemo));
       const userKey = user?.email || user?.id || '';
 
       try {
         if (token) {
           const res = await getProducts(token);
-          if (res.success && res.products && res.products.length > 0) {
-            setProducts(res.products);
-            setSelectedProductId(res.products[0]._id);
-            setCurrentProduct(res.products[0]);
-            setCurrentImage(res.products[0].originalImage || res.products[0].enhancedImage || '');
-            setEnhancedImage(res.products[0].enhancedImage || '');
-            return;
+          if (res.success && Array.isArray(res.products)) {
+            const clean = res.products.filter(p => !p.isDemoFallback && !String(p.id || p._id || '').startsWith('fallback_'));
+            if (clean.length > 0) {
+              setProducts(clean);
+              const firstId = clean[0]._id || clean[0].id;
+              setSelectedProductId(firstId);
+              setCurrentProduct(clean[0]);
+              setCurrentImage(clean[0].originalImage || clean[0].enhancedImage || clean[0].image || '');
+              setEnhancedImage(clean[0].enhancedImage || '');
+              if (userKey) {
+                localStorage.setItem(`karigar_products_${userKey}`, JSON.stringify(clean));
+              }
+              return;
+            }
           }
         }
 
@@ -89,42 +95,31 @@ export default function ProductStudio({ addToast }) {
           if (cached) {
             try {
               const parsed = JSON.parse(cached);
-              if (Array.isArray(parsed) && parsed.length > 0) {
-                setProducts(parsed);
-                setSelectedProductId(parsed[0]._id || parsed[0].id);
-                setCurrentProduct(parsed[0]);
-                setCurrentImage(parsed[0].originalImage || parsed[0].enhancedImage || parsed[0].image || '');
-                setEnhancedImage(parsed[0].enhancedImage || '');
-                return;
+              if (Array.isArray(parsed)) {
+                const clean = parsed.filter(p => !p.isDemoFallback && !String(p.id || p._id || '').startsWith('fallback_'));
+                localStorage.setItem(`karigar_products_${userKey}`, JSON.stringify(clean));
+                if (clean.length > 0) {
+                  setProducts(clean);
+                  const firstId = clean[0]._id || clean[0].id;
+                  setSelectedProductId(firstId);
+                  setCurrentProduct(clean[0]);
+                  setCurrentImage(clean[0].originalImage || clean[0].enhancedImage || clean[0].image || '');
+                  setEnhancedImage(clean[0].enhancedImage || '');
+                  return;
+                }
               }
             } catch (e) {}
           }
         }
 
-        // Only fallback to mock products for demo account
-        if (isDemoAccount) {
-          setProducts(mockProducts);
-          setSelectedProductId(mockProducts[0]._id || 'mock-1');
-          setCurrentProduct(mockProducts[0]);
-          setCurrentImage(mockProducts[0].image);
-          setEnhancedImage(mockProducts[0].image);
-        } else {
-          setProducts([]);
-          setSelectedProductId('');
-          setCurrentProduct(null);
-        }
+        setProducts([]);
+        setSelectedProductId('');
+        setCurrentProduct(null);
       } catch (err) {
         console.warn('Could not load products, using fallback:', err);
-        if (isDemoAccount) {
-          setProducts(mockProducts);
-          setSelectedProductId(mockProducts[0]._id || 'mock-1');
-          setCurrentProduct(mockProducts[0]);
-          setCurrentImage(mockProducts[0].image);
-        } else {
-          setProducts([]);
-          setSelectedProductId('');
-          setCurrentProduct(null);
-        }
+        setProducts([]);
+        setSelectedProductId('');
+        setCurrentProduct(null);
       } finally {
         setLoading(false);
       }

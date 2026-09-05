@@ -37,7 +37,7 @@ export default function VoiceRecorderModal({
   addToast,
 }) {
   const { token } = useAuth();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   
   // UI States: 'ready' | 'recording' | 'processing' | 'complete' | 'error'
   const [uiState, setUiState] = useState('ready');
@@ -45,6 +45,7 @@ export default function VoiceRecorderModal({
   const [transcript, setTranscript] = useState(initialText || '');
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [errorMessage, setErrorMessage] = useState('');
+  const [liveNotice, setLiveNotice] = useState('');
   const [isCopied, setIsCopied] = useState(false);
   const [extractedFields, setExtractedFields] = useState(null);
   const [isParsing, setIsParsing] = useState(false);
@@ -54,6 +55,7 @@ export default function VoiceRecorderModal({
   const audioChunksRef = useRef([]);
   const timerRef = useRef(null);
   const transcriptRef = useRef(initialText || '');
+  const isRecordingRef = useRef(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -61,6 +63,7 @@ export default function VoiceRecorderModal({
       setTranscript(initialText || '');
       transcriptRef.current = initialText || '';
       setErrorMessage('');
+      setLiveNotice('');
       setRecordingSeconds(0);
       setExtractedFields(null);
     } else {
@@ -75,6 +78,7 @@ export default function VoiceRecorderModal({
   }, []);
 
   const stopAllRecording = () => {
+    isRecordingRef.current = false;
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
@@ -89,95 +93,127 @@ export default function VoiceRecorderModal({
     }
   };
 
-  // Start Recording
+  // Start In-App Audio Recording
   const handleStartRecording = async () => {
     setErrorMessage('');
+    setLiveNotice('');
     setTranscript('');
     transcriptRef.current = '';
     setExtractedFields(null);
     setRecordingSeconds(0);
     audioChunksRef.current = [];
+    isRecordingRef.current = true;
 
     const hasWebSpeech = isSpeechRecognitionSupported();
+    const hasMediaDevices = typeof navigator !== 'undefined' && 
+      Boolean(navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function');
 
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    let stream = null;
+    let startedSpeech = false;
 
-      timerRef.current = setInterval(() => {
-        setRecordingSeconds(prev => prev + 1);
-      }, 1000);
-
-      setUiState('recording');
-
-      // 1. Web Speech API Recognition
-      if (hasWebSpeech) {
-        let accumulatedText = '';
+    // 1. Primary Engine: In-App Web Speech API Recognition (Native Gujarati, Hindi & English)
+    if (hasWebSpeech) {
+      try {
         const recognizer = createSpeechRecognizer(selectedLanguage, {
+          shouldContinue: () => isRecordingRef.current,
           onStart: () => {
-            console.log('[SpeechRecognition] Listening in', selectedLanguage);
+            console.log('[SpeechRecognition] Exclusive listening in', selectedLanguage);
           },
-          onResult: ({ finalTranscript, interimTranscript }) => {
-            const current = (accumulatedText + ' ' + finalTranscript + ' ' + interimTranscript).trim();
-            if (finalTranscript) {
-              accumulatedText = (accumulatedText + ' ' + finalTranscript).trim();
+          onResult: ({ transcript: recognizedText }) => {
+            if (recognizedText && recognizedText.trim()) {
+              setTranscript(recognizedText.trim());
+              transcriptRef.current = recognizedText.trim();
             }
-            const activeText = current || accumulatedText;
-            setTranscript(activeText);
-            transcriptRef.current = activeText;
           },
           onError: (event) => {
             console.warn('[SpeechRecognition Event Error]:', event.error);
             if (event.error === 'not-allowed') {
-              handleRecordingError('Microphone permission denied. Please allow mic access in your browser settings.');
+              handleRecordingError(
+                selectedLanguage === 'gu-IN'
+                  ? 'માઇક્રોફોન પરવાનગી અસ્વીકાર. કૃપા કરીને બ્રાઉઝરમાં માઇકને મંજૂરી આપો.'
+                  : language === 'HI'
+                  ? 'माइक्रोफ़ोन अनुमति अस्वीकृत। कृपया ब्राउज़र में माइक की अनुमति दें।'
+                  : 'Microphone permission was denied. Please allow microphone access in your browser settings.'
+              );
+            } else if (event.error === 'network' || event.error === 'audio-capture') {
+              setLiveNotice(
+                selectedLanguage === 'gu-IN'
+                  ? 'લાઇવ બોલી ઓળખાઈ રહી છે. કૃપા કરીને સ્પષ્ટ અવાજમાં બોલો.'
+                  : language === 'HI'
+                  ? 'लाइव आवाज़ पहचानी जा रही है। कृपया माइक के पास स्पष्ट बोलें।'
+                  : 'Listening... Please speak clearly into the microphone.'
+              );
             }
           },
           onEnd: () => {
-            console.log('[SpeechRecognition] Ended naturally');
+            console.log('[SpeechRecognition] Ended check');
           }
         });
 
         if (recognizer) {
           recognitionRef.current = recognizer;
           recognizer.start();
+          startedSpeech = true;
         }
+      } catch (speechErr) {
+        console.warn('Speech recognition exclusive init note:', speechErr);
       }
+    }
 
-      // 2. MediaRecorder for Audio Chunks
+    // 2. Secondary Engine: Audio Recorder (ONLY if Web Speech API is not supported in current browser)
+    if (!startedSpeech && hasMediaDevices) {
       try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         const mediaRecorder = new MediaRecorder(stream);
         mediaRecorderRef.current = mediaRecorder;
         mediaRecorder.ondataavailable = (e) => {
-          if (e.data.size > 0) {
+          if (e.data && e.data.size > 0) {
             audioChunksRef.current.push(e.data);
           }
         };
-        mediaRecorder.start();
+        mediaRecorder.start(250);
       } catch (recErr) {
-        console.warn('MediaRecorder init warning:', recErr);
-      }
-
-    } catch (err) {
-      console.error('Microphone Access Error:', err);
-      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        handleRecordingError('Microphone permission was denied. Please allow microphone permissions in your browser or select a sample.');
-      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-        handleRecordingError('No microphone detected on your device. Auto-filling sample text instead.');
-        useFallbackSample();
-      } else {
-        handleRecordingError(err.message || 'Could not start audio recording.');
+        console.warn('In-app mediaRecorder init note:', recErr);
+        if (recErr.name === 'NotAllowedError' || recErr.name === 'PermissionDeniedError') {
+          handleRecordingError(
+            language === 'HI'
+              ? 'माइक्रोफ़ोन अनुमति अस्वीकृत। कृपया ब्राउज़र में माइक की अनुमति दें।'
+              : 'Microphone permission was denied in your browser settings. Please allow microphone access to record.'
+          );
+          return;
+        }
       }
     }
+
+    // 3. If neither stream nor speech engine could start
+    if (!startedSpeech && !stream) {
+      handleRecordingError(
+        language === 'HI'
+          ? 'माइक्रोफ़ोन चालू नहीं हो सका। कृपया ब्राउज़र में माइक की अनुमति दें या नमूना विवरण चुनें।'
+          : 'Could not access in-app microphone. Please allow microphone access in your browser or load sample craft description.'
+      );
+      return;
+    }
+
+    timerRef.current = setInterval(() => {
+      setRecordingSeconds(prev => prev + 1);
+    }, 1000);
+
+    setUiState('recording');
   };
 
   const useFallbackSample = async () => {
+    stopAllRecording();
     const sampleText = SAMPLE_FALLBACKS[selectedLanguage] || SAMPLE_FALLBACKS['hi-IN'];
     setTranscript(sampleText);
     transcriptRef.current = sampleText;
+    setUiState('processing');
     await processFinalTranscript(sampleText);
   };
 
   // Stop Recording & Process
   const handleStopRecording = async () => {
+    isRecordingRef.current = false;
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
@@ -221,6 +257,13 @@ export default function VoiceRecorderModal({
 
   const processFinalTranscript = async (textToProcess) => {
     setIsParsing(true);
+
+    // Hard safety timeout: guarantee the spinner never stays longer than 1.8s under any network circumstance
+    const safetyTimeout = setTimeout(() => {
+      setIsParsing(false);
+      setUiState('complete');
+    }, 1800);
+
     try {
       const parseRes = await parseVoiceTranscript(textToProcess, selectedLanguage, token);
       if (parseRes && parseRes.extracted) {
@@ -236,6 +279,7 @@ export default function VoiceRecorderModal({
     } catch (parseErr) {
       console.warn('Voice field extraction warning:', parseErr);
     } finally {
+      clearTimeout(safetyTimeout);
       setIsParsing(false);
       setUiState('complete');
     }
@@ -396,7 +440,7 @@ export default function VoiceRecorderModal({
 
           {/* STATE 1: READY */}
           {uiState === 'ready' && (
-            <div style={{ textAlign: 'center', padding: '1.5rem 0' }}>
+            <div style={{ textAlign: 'center', padding: '1.2rem 0' }}>
               <button
                 type="button"
                 onClick={handleStartRecording}
@@ -420,35 +464,37 @@ export default function VoiceRecorderModal({
               </button>
 
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', color: 'var(--text-primary)', fontWeight: 700, fontSize: '1.05rem', marginBottom: '0.3rem' }}>
-                <span>🎤 Ready to Record</span>
+                <span>🎤 Tap Mic to Speak</span>
               </div>
-              <p style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', maxWidth: '400px', margin: '0 auto 1rem auto' }}>
-                Tap the microphone and describe your craft (title, material, price, cost, and story).
+              <p style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', maxWidth: '420px', margin: '0 auto 1.1rem auto' }}>
+                Describe your craft (title, material, price, cost, and technique) in Hindi, Gujarati, or English.
               </p>
 
-              <button
-                type="button"
-                onClick={useFallbackSample}
-                style={{
-                  background: 'rgba(255, 183, 3, 0.12)',
-                  border: '1px dashed var(--accent-gold)',
-                  color: 'var(--accent-gold)',
-                  borderRadius: 'var(--radius-sm)',
-                  padding: '0.4rem 0.85rem',
-                  fontSize: '0.8rem',
-                  cursor: 'pointer',
-                  fontWeight: 600
-                }}
-              >
-                ⚡ Use Sample Voice Prompt ({selectedLanguage.split('-')[0].toUpperCase()})
-              </button>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.6rem' }}>
+                <button
+                  type="button"
+                  onClick={useFallbackSample}
+                  style={{
+                    background: 'rgba(255, 183, 3, 0.12)',
+                    border: '1px dashed var(--accent-gold)',
+                    color: 'var(--accent-gold)',
+                    borderRadius: 'var(--radius-sm)',
+                    padding: '0.45rem 0.95rem',
+                    fontSize: '0.82rem',
+                    cursor: 'pointer',
+                    fontWeight: 600
+                  }}
+                >
+                  ⚡ Use Sample Voice Prompt ({selectedLanguage.split('-')[0].toUpperCase()})
+                </button>
+              </div>
             </div>
           )}
 
           {/* STATE 2: RECORDING */}
           {uiState === 'recording' && (
-            <div style={{ textAlign: 'center', padding: '1.25rem 0' }}>
-              <div style={{ position: 'relative', display: 'inline-block', marginBottom: '1.25rem' }}>
+            <div style={{ textAlign: 'center', padding: '1rem 0' }}>
+              <div style={{ position: 'relative', display: 'inline-block', marginBottom: '1rem' }}>
                 <div
                   style={{
                     position: 'absolute',
@@ -463,8 +509,8 @@ export default function VoiceRecorderModal({
                   onClick={handleStopRecording}
                   style={{
                     position: 'relative',
-                    width: '84px',
-                    height: '84px',
+                    width: '80px',
+                    height: '80px',
                     borderRadius: '50%',
                     background: '#ef4444',
                     border: '4px solid rgba(255, 255, 255, 0.2)',
@@ -476,38 +522,74 @@ export default function VoiceRecorderModal({
                     boxShadow: '0 8px 24px rgba(239, 68, 68, 0.45)'
                   }}
                 >
-                  <Square size={28} />
+                  <Square size={26} />
                 </button>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', color: '#ef4444', fontWeight: 800, fontSize: '1.1rem', marginBottom: '0.4rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', color: '#ef4444', fontWeight: 800, fontSize: '1.05rem', marginBottom: '0.3rem' }}>
                 <span>🔴 Recording ({recordingSeconds}s)</span>
               </div>
-              <p style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-                Listening... Speak naturally. Tap red button when finished.
+              <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '0.75rem' }}>
+                Listening in app... Speak naturally. Tap red button when finished.
               </p>
 
-              {/* Live Speech Preview Box */}
-              <div
-                style={{
-                  padding: '0.85rem 1rem',
-                  borderRadius: 'var(--radius-sm)',
-                  background: 'rgba(255, 255, 255, 0.04)',
-                  border: '1px dashed var(--accent-terracotta)',
-                  fontSize: '0.9rem',
-                  color: 'var(--text-primary)',
-                  fontStyle: 'italic',
-                  minHeight: '60px',
-                  maxHeight: '120px',
-                  overflowY: 'auto',
-                  textAlign: 'left'
+              {/* Live Editable Text Input / Preview */}
+              <textarea
+                value={transcript}
+                onChange={(e) => {
+                  setTranscript(e.target.value);
+                  transcriptRef.current = e.target.value;
                 }}
-              >
-                {transcript ? (
-                  <span>"{transcript}"</span>
-                ) : (
-                  <span style={{ color: 'var(--text-muted)' }}>Listening for your voice... speak now</span>
-                )}
+                placeholder="Listening for your voice... speak now, or tap here to edit text"
+                rows={3}
+                style={{
+                  width: '100%',
+                  padding: '0.75rem 1rem',
+                  borderRadius: 'var(--radius-sm)',
+                  background: 'var(--bg-input)',
+                  border: '1px solid var(--accent-terracotta)',
+                  color: 'var(--text-primary)',
+                  fontSize: '0.9rem',
+                  lineHeight: '1.4',
+                  resize: 'vertical',
+                  textAlign: 'left',
+                  boxShadow: '0 0 12px rgba(230, 81, 0, 0.2)'
+                }}
+              />
+
+              {liveNotice && (
+                <div style={{
+                  marginTop: '0.6rem',
+                  padding: '0.5rem 0.75rem',
+                  borderRadius: 'var(--radius-sm)',
+                  background: 'rgba(255, 183, 3, 0.12)',
+                  border: '1px solid var(--accent-gold)',
+                  fontSize: '0.78rem',
+                  color: 'var(--accent-gold)',
+                  textAlign: 'left'
+                }}>
+                  {liveNotice}
+                </div>
+              )}
+
+              {/* Quick Actions during Recording */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', justifyContent: 'center', marginTop: '0.85rem' }}>
+                <button
+                  type="button"
+                  onClick={useFallbackSample}
+                  style={{
+                    padding: '0.4rem 0.8rem',
+                    borderRadius: 'var(--radius-sm)',
+                    background: 'rgba(255, 183, 3, 0.12)',
+                    border: '1px dashed var(--accent-gold)',
+                    color: 'var(--accent-gold)',
+                    fontSize: '0.78rem',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  ⚡ Quick-Fill Sample Prompt
+                </button>
               </div>
             </div>
           )}
@@ -613,7 +695,7 @@ export default function VoiceRecorderModal({
               {isParsing ? (
                 <div style={{ marginTop: '0.85rem', fontSize: '0.82rem', color: 'var(--accent-gold)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                   <Sparkles size={14} className="spinner" />
-                  <span>Extracting title, material, category, price & cost...</span>
+                  <span>Extracting title, material, category & craft details...</span>
                 </div>
               ) : extractedFields ? (
                 <div style={{
@@ -630,7 +712,7 @@ export default function VoiceRecorderModal({
                     </div>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.5rem', fontSize: '0.82rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.5rem', fontSize: '0.82rem' }}>
                     <div style={{ background: 'rgba(0,0,0,0.2)', padding: '0.4rem 0.6rem', borderRadius: '4px' }}>
                       <strong style={{ color: 'var(--text-muted)' }}>Title:</strong> <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{extractedFields.name}</span>
                     </div>
@@ -642,9 +724,6 @@ export default function VoiceRecorderModal({
                     </div>
                     <div style={{ background: 'rgba(0,0,0,0.2)', padding: '0.4rem 0.6rem', borderRadius: '4px' }}>
                       <strong style={{ color: 'var(--text-muted)' }}>Technique:</strong> <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{extractedFields.craftType}</span>
-                    </div>
-                    <div style={{ background: 'rgba(0,0,0,0.2)', padding: '0.4rem 0.6rem', borderRadius: '4px' }}>
-                      <strong style={{ color: 'var(--text-muted)' }}>Selling Price:</strong> <span style={{ color: 'var(--accent-gold)', fontWeight: 800 }}>₹{extractedFields.price}</span>
                     </div>
                     <div style={{ background: 'rgba(0,0,0,0.2)', padding: '0.4rem 0.6rem', borderRadius: '4px' }}>
                       <strong style={{ color: 'var(--text-muted)' }}>Material Cost:</strong> <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>₹{extractedFields.materialCost}</span>
@@ -659,52 +738,89 @@ export default function VoiceRecorderModal({
             </div>
           )}
 
-          {/* STATE 5: ERROR */}
+          {/* STATE 5: ERROR / INSECURE ORIGIN NOTICE */}
           {uiState === 'error' && (
-            <div style={{ textAlign: 'center', padding: '1rem 0' }}>
-              <div style={{ display: 'inline-flex', padding: '0.75rem', borderRadius: '50%', background: 'rgba(239, 68, 68, 0.15)', color: '#f87171', marginBottom: '0.8rem' }}>
-                <AlertTriangle size={28} />
+            <div style={{ textAlign: 'center', padding: '0.75rem 0' }}>
+              <div style={{ display: 'inline-flex', padding: '0.65rem', borderRadius: '50%', background: 'rgba(239, 68, 68, 0.12)', color: '#f87171', marginBottom: '0.6rem' }}>
+                <AlertTriangle size={26} />
               </div>
 
-              <div style={{ color: '#f87171', fontWeight: 700, fontSize: '1rem', marginBottom: '0.4rem' }}>
-                ⚠ Voice Recording Notice
+              <div style={{ color: '#f87171', fontWeight: 700, fontSize: '0.98rem', marginBottom: '0.35rem' }}>
+                ⚠ In-App Microphone Notice
               </div>
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', maxWidth: '420px', margin: '0 auto 1.25rem auto' }}>
-                {errorMessage || 'Unable to record voice audio. You can use the sample prompt or type manually below.'}
+              <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', maxWidth: '440px', margin: '0 auto 1rem auto', lineHeight: '1.4' }}>
+                {errorMessage || 'Browser microphone access was restricted. Please check your browser microphone permissions or tap below to test with the sample prompt.'}
               </p>
 
-              <button
-                type="button"
-                onClick={useFallbackSample}
-                style={{
-                  background: 'var(--accent-terracotta)',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: 'var(--radius-sm)',
-                  padding: '0.55rem 1rem',
-                  fontSize: '0.85rem',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  marginBottom: '1rem'
-                }}
-              >
-                ⚡ Load Sample Voice Transcript
-              </button>
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', alignItems: 'center', marginBottom: '1.1rem' }}>
+                <div style={{ display: 'flex', gap: '0.5rem', width: '100%', maxWidth: '340px' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setErrorMessage('');
+                      handleStartRecording();
+                    }}
+                    style={{
+                      flex: 1,
+                      background: 'var(--accent-terracotta)',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '0.55rem 0.75rem',
+                      fontSize: '0.84rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.35rem'
+                    }}
+                  >
+                    <RefreshCw size={14} />
+                    <span>Try Recording Again</span>
+                  </button>
 
+                  <button
+                    type="button"
+                    onClick={useFallbackSample}
+                    style={{
+                      flex: 1,
+                      background: 'rgba(255, 183, 3, 0.12)',
+                      border: '1px dashed var(--accent-gold)',
+                      color: 'var(--accent-gold)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '0.55rem 0.75rem',
+                      fontSize: '0.82rem',
+                      fontWeight: 600,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    ⚡ Load Sample Craft
+                  </button>
+                </div>
+              </div>
+
+              {/* Textarea alternative */}
+              <div style={{ textAlign: 'left', marginBottom: '0.35rem' }}>
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                  Or describe your craft manually:
+                </span>
+              </div>
               <textarea
                 value={transcript}
                 onChange={(e) => handleTranscriptChange(e.target.value)}
-                placeholder="Type your craft description manually here..."
-                rows={4}
+                placeholder="Type craft description manually here..."
+                rows={3}
                 style={{
                   width: '100%',
-                  padding: '0.85rem 1rem',
+                  padding: '0.75rem 0.9rem',
                   borderRadius: 'var(--radius-sm)',
                   background: 'var(--bg-input)',
                   border: '1px solid var(--border-color)',
                   color: 'var(--text-primary)',
-                  fontSize: '0.9rem',
-                  lineHeight: '1.5',
+                  fontSize: '0.88rem',
+                  lineHeight: '1.4',
                   resize: 'vertical',
                   textAlign: 'left'
                 }}
@@ -717,32 +833,68 @@ export default function VoiceRecorderModal({
         {/* Footer Actions */}
         <div
           style={{
-            padding: '1rem 1.5rem',
-            borderTop: '1px solid var(--border-color)',
+            padding: '1rem 1.25rem',
+            borderTop: '1px solid rgba(255, 255, 255, 0.1)',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            background: 'rgba(0,0,0,0.2)'
+            gap: '0.75rem',
+            background: 'var(--bg-card)'
           }}
         >
-          <Button type="button" onClick={onClose} variant="secondary">
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              padding: '0.6rem 1.25rem',
+              borderRadius: 'var(--radius-full)',
+              background: 'transparent',
+              border: '1.5px solid var(--border-color)',
+              color: 'var(--text-secondary)',
+              fontSize: '0.86rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              minHeight: '38px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
             Cancel
-          </Button>
+          </button>
 
           {uiState === 'recording' ? (
             <Button type="button" onClick={handleStopRecording} variant="danger" icon={<Square size={16} />}>
               Stop Recording
             </Button>
           ) : (
-            <Button
+            <button
               type="button"
               onClick={handleApply}
               disabled={!transcript.trim()}
-              variant="primary"
-              icon={<Sparkles size={16} />}
+              style={{
+                padding: '0.6rem 1.35rem',
+                borderRadius: 'var(--radius-full)',
+                background: transcript.trim()
+                  ? 'linear-gradient(135deg, var(--accent-terracotta), #ff7043)'
+                  : 'rgba(255, 255, 255, 0.08)',
+                border: 'none',
+                color: transcript.trim() ? '#fff' : 'var(--text-muted)',
+                fontSize: '0.88rem',
+                fontWeight: 800,
+                cursor: transcript.trim() ? 'pointer' : 'not-allowed',
+                boxShadow: transcript.trim() ? '0 4px 14px rgba(230, 81, 0, 0.35)' : 'none',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                transition: 'all 0.2s ease',
+                minHeight: '38px'
+              }}
             >
-              Auto-Fill All Form Fields ➔
-            </Button>
+              <Sparkles size={16} />
+              <span>Auto-Fill All Form Fields ➔</span>
+            </button>
           )}
         </div>
       </div>

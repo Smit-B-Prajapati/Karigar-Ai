@@ -53,8 +53,10 @@ export default function ProductDetails({ addToast }) {
     async function fetchProductDetails() {
       setLoading(true);
       setError(null);
+      const userKey = user?.email || user?.id || '';
+
       try {
-        if (token && id && !id.startsWith('mock')) {
+        if (token && id) {
           const res = await getProductById(id, token);
           if (res.success && res.product) {
             setProduct(res.product);
@@ -62,24 +64,45 @@ export default function ProductDetails({ addToast }) {
             return;
           }
         }
-        const isDemoAccount = Boolean(user && (user.email === 'ramesh@karigar.in' || user.isDemo));
-        if (isDemoAccount) {
-          const found = mockProducts.find(p => (p._id || p.id) === id) || mockProducts[0];
-          setProduct(found);
-          setEditFormData(found);
-        } else {
-          setError(language === 'HI' ? 'उत्पाद नहीं मिला।' : 'Product not found.');
+
+        // Check user's local products cache
+        if (userKey) {
+          try {
+            const raw = localStorage.getItem(`karigar_products_${userKey}`);
+            if (raw) {
+              const list = JSON.parse(raw);
+              if (Array.isArray(list)) {
+                const found = list.find(p => (p._id || p.id) === id);
+                if (found) {
+                  setProduct(found);
+                  setEditFormData(found);
+                  return;
+                }
+              }
+            }
+          } catch (e) {}
         }
+
+        // Check generic local products
+        try {
+          const raw = localStorage.getItem('karigar_local_products');
+          if (raw) {
+            const list = JSON.parse(raw);
+            if (Array.isArray(list)) {
+              const found = list.find(p => (p._id || p.id) === id);
+              if (found) {
+                setProduct(found);
+                setEditFormData(found);
+                return;
+              }
+            }
+          }
+        } catch (e) {}
+
+        setError(language === 'HI' ? 'उत्पाद नहीं मिला।' : 'Product not found.');
       } catch (err) {
         console.warn('Fetch product details error:', err);
-        const isDemoAccount = Boolean(user && (user.email === 'ramesh@karigar.in' || user.isDemo));
-        if (isDemoAccount) {
-          const found = mockProducts.find(p => (p._id || p.id) === id) || mockProducts[0];
-          setProduct(found);
-          setEditFormData(found);
-        } else {
-          setError(language === 'HI' ? 'उत्पाद नहीं मिला।' : 'Product not found.');
-        }
+        setError(language === 'HI' ? 'उत्पाद नहीं मिला।' : 'Product not found.');
       } finally {
         setLoading(false);
       }
@@ -143,10 +166,24 @@ export default function ProductDetails({ addToast }) {
     if (!window.confirm(`${t('catalogue.confirmDelete', 'Are you sure you want to delete this product?')} "${product.name}"`)) return;
 
     try {
-      if (product._id && !product._id.startsWith('mock') && token) {
-        await deleteProduct(product._id, token);
+      const prodId = product._id || product.id;
+      if (prodId) {
+        await deleteProduct(prodId, token);
+        const userKey = user?.email || user?.id || '';
+        if (userKey) {
+          try {
+            const raw = localStorage.getItem(`karigar_products_${userKey}`);
+            if (raw) {
+              const arr = JSON.parse(raw);
+              if (Array.isArray(arr)) {
+                const next = arr.filter(p => (p._id || p.id) !== prodId && p._id !== prodId && p.id !== prodId);
+                localStorage.setItem(`karigar_products_${userKey}`, JSON.stringify(next));
+              }
+            }
+          } catch (e) {}
+        }
       }
-      if (addToast) addToast('Product deleted', 'success');
+      if (addToast) addToast('Product deleted successfully', 'success');
       navigate('/catalogue');
     } catch (err) {
       if (addToast) addToast(err.message || 'Failed to delete product', 'error');
