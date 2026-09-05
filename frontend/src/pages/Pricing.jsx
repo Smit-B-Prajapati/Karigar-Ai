@@ -198,7 +198,8 @@ export default function Pricing({ addToast }) {
 
     const priceToApply = customFinalPrice || (pricingData.pricing || pricingData.pricingRecommendation)?.recommendedPrice;
 
-    if (!currentProduct || !currentProduct._id || currentProduct._id.startsWith('mock')) {
+    const pId = currentProduct._id || currentProduct.id;
+    if (!pId || String(pId).startsWith('mock')) {
       if (addToast) addToast(`Final Selling Price ₹${priceToApply} saved to preview!`, 'success');
       return;
     }
@@ -206,17 +207,18 @@ export default function Pricing({ addToast }) {
     setIsApplying(true);
     try {
       const updatePayload = {
-        price: priceToApply,
-        materialCost: pricingData.costBreakdown.materialCost,
-        labourCost: pricingData.costBreakdown.labourCost,
+        price: parseFloat(priceToApply) || 0,
+        materialCost: pricingData.costBreakdown?.materialCost || 0,
+        labourCost: pricingData.costBreakdown?.labourCost || 0,
+        packagingCost: pricingData.costBreakdown?.packagingCost || 0,
+        otherCost: pricingData.costBreakdown?.otherCost || 0,
       };
 
-      const res = await updateProduct(currentProduct._id, updatePayload, token);
-      if (res.success && res.product) {
-        setCurrentProduct(res.product);
-        setProducts(prev => prev.map(p => p._id === res.product._id ? res.product : p));
-        if (addToast) addToast(`Final Selling Price ₹${priceToApply} saved & synced to MongoDB!`, 'success');
-      }
+      const res = await updateProduct(pId, updatePayload, token);
+      const updated = (res && res.product) ? res.product : { ...currentProduct, ...updatePayload };
+      setCurrentProduct(updated);
+      setProducts(prev => prev.map(p => (p._id || p.id) === pId ? updated : p));
+      if (addToast) addToast(`Final Selling Price ₹${priceToApply} saved & synced to MongoDB and Catalogue!`, 'success');
     } catch (err) {
       if (addToast) addToast(err.message || 'Failed to update product price', 'error');
     } finally {

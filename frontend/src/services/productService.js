@@ -179,8 +179,9 @@ export async function updateProduct(id, productData, token) {
     locals[index] = { ...locals[index], ...productData, updatedAt: new Date().toISOString() };
     if (!updatedProduct) updatedProduct = locals[index];
     saveLocalProducts(locals);
-  } else if (!updatedProduct) {
-    updatedProduct = { _id: id, id, ...productData };
+  } else {
+    if (!updatedProduct) updatedProduct = { _id: id, id, ...productData, updatedAt: new Date().toISOString() };
+    saveLocalProducts([updatedProduct, ...locals]);
   }
 
   // Also sync with all user caches in localStorage
@@ -188,7 +189,7 @@ export async function updateProduct(id, productData, token) {
     try {
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
-        if (key && key.startsWith('karigar_products_')) {
+        if (key && (key.startsWith('karigar_products_') || key === 'karigar_local_products')) {
           const raw = localStorage.getItem(key);
           if (raw) {
             const arr = JSON.parse(raw);

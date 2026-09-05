@@ -9,7 +9,7 @@ import DetectedAttributes from '../components/DetectedAttributes.jsx';
 import VoiceRecorderModal from '../components/VoiceRecorderModal.jsx';
 import BeforeAfterComparison from '../components/BeforeAfterComparison.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
-import { createProduct, uploadProductImage } from '../services/productService.js';
+import { createProduct } from '../services/productService.js';
 import { analyzeImage } from '../services/aiService.js';
 import { enhancePhoto } from '../services/imageEnhanceService.js';
 import { optimizeImageForUpload } from '../utils/imageOptimizer.js';
@@ -80,10 +80,20 @@ export default function AddProduct({ addToast }) {
 
   // Step 2 Image Handler - AUTOMATICALLY triggers Studio Enhancement & AI Analysis
   const handleImageSelect = async (base64Data, rawFile) => {
+    let optimizedBase64 = base64Data;
+    try {
+      const opt = await optimizeImageForUpload(base64Data || rawFile, { maxDimension: 1200, quality: 0.82 });
+      if (opt && opt.base64) {
+        optimizedBase64 = opt.base64;
+      }
+    } catch (e) {
+      console.warn('Pre-optimization notice:', e);
+    }
+
     setFormData(prev => ({
       ...prev,
-      photoData: base64Data,
-      photoFile: rawFile
+      photoData: optimizedBase64,
+      photoFile: null
     }));
     setEnhancementError('');
     setEnhancedImage('');
@@ -92,7 +102,7 @@ export default function AddProduct({ addToast }) {
 
     // Advance to Step 3 Studio & Run Pipeline Automatically
     setCurrentStep(3);
-    runAutomaticStudioPipeline(base64Data || rawFile);
+    runAutomaticStudioPipeline(optimizedBase64);
   };
 
   // Automatic Enhancement & Analysis Pipeline
@@ -226,22 +236,6 @@ export default function AddProduct({ addToast }) {
       }
 
       let created = res.product;
-
-      // Upload image payload to product endpoint if available
-      if (formData.photoData && created._id) {
-        try {
-          const imgRes = await uploadProductImage(
-            created._id,
-            formData.photoFile || formData.photoData,
-            token
-          );
-          if (imgRes.success && imgRes.product) {
-            created = imgRes.product;
-          }
-        } catch (imgErr) {
-          console.warn('Image upload endpoint warning:', imgErr.message);
-        }
-      }
 
       // Cache product in localStorage for this user
       const userKey = user?.email || user?.id;

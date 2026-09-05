@@ -216,10 +216,32 @@ export async function calculateProductPricingById(productId, payload, token) {
       headers: {
         Authorization: `Bearer ${token}`,
       },
-      timeout: 2500,
+      timeout: 6000,
       body: JSON.stringify(payload),
     });
-    if (res && res.product) return res;
+    if (res && res.product) {
+      if (typeof window !== 'undefined') {
+        try {
+          const locals = JSON.parse(localStorage.getItem('karigar_local_products') || '[]');
+          const updatedLocals = locals.map(p => (p._id || p.id) === productId ? { ...p, ...res.product } : p);
+          localStorage.setItem('karigar_local_products', JSON.stringify(updatedLocals));
+
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith('karigar_products_')) {
+              const cached = JSON.parse(localStorage.getItem(key) || '[]');
+              if (Array.isArray(cached)) {
+                const updated = cached.map(p => (p._id || p.id) === productId ? { ...p, ...res.product } : p);
+                localStorage.setItem(key, JSON.stringify(updated));
+              }
+            }
+          }
+        } catch (syncErr) {
+          console.warn('Pricing cache sync note:', syncErr);
+        }
+      }
+      return res;
+    }
   } catch (err) {
     console.warn('Backend calculateProductPricingById unavailable, updating local cache:', err.message);
   }
@@ -230,27 +252,41 @@ export async function calculateProductPricingById(productId, payload, token) {
 
   if (typeof window !== 'undefined') {
     try {
-      const keys = Object.keys(localStorage).filter(k => k.startsWith('karigar_products_'));
-      for (const k of keys) {
-        const stored = JSON.parse(localStorage.getItem(k) || '[]');
-        const idx = stored.findIndex(p => (p._id || p.id) === productId);
-        if (idx !== -1) {
-          stored[idx] = {
-            ...stored[idx],
-            price: targetPrice,
-            materialCost: payload.materialCost,
-            labourCost: payload.labourCost,
-            packagingCost: payload.packagingCost,
-            otherCost: payload.otherCost,
-            pricingAnalysis: pricingResult.pricing
-          };
-          localStorage.setItem(k, JSON.stringify(stored));
-          return {
-            success: true,
-            product: stored[idx],
-            ...pricingResult
-          };
+      const updateData = {
+        price: targetPrice,
+        materialCost: payload.materialCost,
+        labourCost: payload.labourCost,
+        packagingCost: payload.packagingCost,
+        otherCost: payload.otherCost,
+        pricingAnalysis: pricingResult.pricing
+      };
+
+      const locals = JSON.parse(localStorage.getItem('karigar_local_products') || '[]');
+      const updatedLocals = locals.map(p => (p._id || p.id) === productId ? { ...p, ...updateData } : p);
+      localStorage.setItem('karigar_local_products', JSON.stringify(updatedLocals));
+
+      let matchedProduct = null;
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('karigar_products_')) {
+          const stored = JSON.parse(localStorage.getItem(key) || '[]');
+          if (Array.isArray(stored)) {
+            const idx = stored.findIndex(p => (p._id || p.id) === productId);
+            if (idx !== -1) {
+              stored[idx] = { ...stored[idx], ...updateData };
+              matchedProduct = stored[idx];
+              localStorage.setItem(key, JSON.stringify(stored));
+            }
+          }
         }
+      }
+
+      if (matchedProduct) {
+        return {
+          success: true,
+          product: matchedProduct,
+          ...pricingResult
+        };
       }
     } catch (storageErr) {
       console.warn('localStorage update note:', storageErr);

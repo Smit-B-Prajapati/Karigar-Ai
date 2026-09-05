@@ -1,5 +1,6 @@
 import Product from '../models/product.model.js';
 import { calculateDynamicPricing } from '../services/pricing.service.js';
+import { persistProduct } from '../services/storageService.js';
 
 /**
  * Main Dynamic Pricing Assistant Analysis Endpoint
@@ -161,6 +162,7 @@ export const calculateProductPricingController = async (req, res) => {
       };
 
       await product.save();
+      persistProduct(product);
     }
 
     res.status(200).json({

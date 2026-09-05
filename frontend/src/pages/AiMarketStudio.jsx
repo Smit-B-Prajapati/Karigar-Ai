@@ -7,7 +7,7 @@ import EmptyState from '../components/EmptyState.jsx';
 import ExplainablePricingCard from '../components/ExplainablePricingCard.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useLanguage } from '../context/LanguageContext.jsx';
-import { getProducts } from '../services/productService.js';
+import { getProducts, updateProduct } from '../services/productService.js';
 import { analyzeDynamicPricing, calculateProductPricingById } from '../services/pricingService.js';
 import { getBusinessAdvice } from '../services/advisorService.js';
 import { mockProducts } from '../services/dummyData.js';
@@ -364,31 +364,80 @@ export default function AiMarketStudio({ addToast }) {
     setIsSavingPrice(true);
     try {
       const pId = currentProduct._id || currentProduct.id;
+      const numPrice = parseFloat(recommendedPrice) || 0;
+      const mCost = parseFloat(materialCost) || 0;
+      const lCost = parseFloat(labourCost) || 0;
+      const pkgCost = parseFloat(packagingCost) || 0;
+      const othCost = parseFloat(otherCost) || 0;
+
+      const updatePayload = {
+        price: numPrice,
+        materialCost: mCost,
+        labourCost: lCost,
+        packagingCost: pkgCost,
+        otherCost: othCost,
+      };
+
+      // 1. Canonical Product Update (Updates MongoDB via PUT /api/products/:id & syncs localStorage)
+      let updatedItem = { ...currentProduct, ...updatePayload };
+      try {
+        const updateRes = await updateProduct(pId, updatePayload, token);
+        if (updateRes && updateRes.product) {
+          updatedItem = updateRes.product;
+        }
+      } catch (upErr) {
+        console.warn('updateProduct notice:', upErr.message);
+      }
+
+      // 2. Also notify backend pricing recommendation pipeline
       const isRealDbProduct = pId && !String(pId).startsWith('mock') && !String(pId).startsWith('fallback_');
-
       if (isRealDbProduct && token) {
-        const res = await calculateProductPricingById(pId, {
-          materialCost: parseFloat(materialCost) || 0,
-          labourCost: parseFloat(labourCost) || 0,
-          packagingCost: parseFloat(packagingCost) || 0,
-          otherCost: parseFloat(otherCost) || 0,
-          customPrice: recommendedPrice,
+        calculateProductPricingById(pId, {
+          materialCost: mCost,
+          labourCost: lCost,
+          packagingCost: pkgCost,
+          otherCost: othCost,
+          customPrice: numPrice,
           applyToProduct: true,
-        }, token);
+        }, token).catch(e => console.warn('Background pricing sync note:', e));
+      }
 
-        if (res.success && res.product) {
-          setCurrentProduct(res.product);
-          setProducts(prev => prev.map(p => (p._id || p.id) === pId ? res.product : p));
-          if (addToast) addToast(`Selling price saved as ₹${recommendedPrice.toLocaleString('en-IN')} in database & catalogue!`, 'success');
-          return;
+      // 3. Update React active states in current page
+      setCurrentProduct(updatedItem);
+      setProducts(prev => prev.map(p => (p._id || p.id) === pId ? updatedItem : p));
+
+      // 4. Force synchronous sync across all user product caches in localStorage
+      const userKey = user?.email || user?.id || '';
+      if (typeof window !== 'undefined') {
+        try {
+          if (userKey) {
+            const key = `karigar_products_${userKey}`;
+            const cached = JSON.parse(localStorage.getItem(key) || '[]');
+            if (Array.isArray(cached)) {
+              const updatedCached = cached.map(p => (p._id || p.id) === pId ? { ...p, ...updatePayload } : p);
+              localStorage.setItem(key, JSON.stringify(updatedCached));
+            }
+          }
+          const locals = JSON.parse(localStorage.getItem('karigar_local_products') || '[]');
+          if (Array.isArray(locals)) {
+            const updatedLocals = locals.map(p => (p._id || p.id) === pId ? { ...p, ...updatePayload } : p);
+            localStorage.setItem('karigar_local_products', JSON.stringify(updatedLocals));
+          }
+        } catch (storageErr) {
+          console.warn('localStorage pricing sync note:', storageErr);
         }
       }
 
-      // Fallback state update
-      setCurrentProduct(prev => ({ ...prev, price: recommendedPrice }));
-      setProducts(prev => prev.map(p => (p._id || p.id) === pId ? { ...p, price: recommendedPrice } : p));
-      if (addToast) addToast(`Selling price updated to ₹${recommendedPrice.toLocaleString('en-IN')}!`, 'success');
+      if (addToast) {
+        addToast(
+          language === 'HI'
+            ? `नया बिक्री मूल्य ₹${numPrice.toLocaleString('en-IN')} कैटलॉग और डेटाबेस में सफलतापूर्वक सहेज लिया गया!`
+            : `Selling price saved as ₹${numPrice.toLocaleString('en-IN')} in catalogue & database!`,
+          'success'
+        );
+      }
     } catch (err) {
+      console.error('Apply recommended price error:', err);
       if (addToast) addToast(err.message || 'Failed to update price', 'error');
     } finally {
       setIsSavingPrice(false);
