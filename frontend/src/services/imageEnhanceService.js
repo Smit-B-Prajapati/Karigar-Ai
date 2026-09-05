@@ -22,8 +22,51 @@ export function resolveImageUrl(urlOrPath) {
 }
 
 /**
- * Intelligent Client-Side Background Segmentation using Perimeter Flood-Fill.
- * Erases surface backgrounds (bed sheets, tables, floors) and generates transparent PNG.
+ * In-browser Neural Network AI Background Segmentation using @imgly/background-removal.
+ * Runs 100% locally in the browser via WebAssembly & ONNX runtime without external API costs/keys.
+ */
+async function segmentWithLocalAI(imageSource) {
+  if (typeof window === 'undefined' || !imageSource) return null;
+  try {
+    const imgly = await import('@imgly/background-removal');
+    const removeBackground = imgly.removeBackground || imgly.default;
+    if (typeof removeBackground !== 'function') return null;
+
+    // Run AI segmentation with a 15-second safety timeout
+    const segmentationPromise = removeBackground(imageSource, {
+      model: 'isnet_quint8', // fast quantized model (~28MB)
+      debug: false,
+      output: {
+        format: 'image/png',
+        quality: 0.95,
+      },
+    });
+
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Local AI segmentation timeout')), 15000)
+    );
+
+    const resultBlob = await Promise.race([segmentationPromise, timeoutPromise]);
+    if (!resultBlob || !(resultBlob instanceof Blob)) {
+      return null;
+    }
+
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(resultBlob);
+    });
+  } catch (err) {
+    console.warn('In-browser AI segmentation notice (falling back to smart studio compositor):', err.message);
+    return null;
+  }
+}
+
+/**
+ * Intelligent Client-Side Background Segmentation using Multi-Cluster Perimeter Matting
+ * with Center Craft Protection and Studio Edge Vignette Fallback.
+ * Erases surface backgrounds (bed sheets, laptop keyboards, tables, floors) and generates transparent craft.
  */
 function isolateForegroundWithCanvas(img, targetWidth, targetHeight) {
   try {
@@ -36,95 +79,163 @@ function isolateForegroundWithCanvas(img, targetWidth, targetHeight) {
     tempCtx.drawImage(img, 0, 0, targetWidth, targetHeight);
     const imgData = tempCtx.getImageData(0, 0, targetWidth, targetHeight);
     const data = imgData.data;
+    const totalPixels = targetWidth * targetHeight;
 
-    // Check if image already has transparent pixels (e.g. from Remove.bg)
+    // Check if image already has transparent pixels (e.g. from local AI or Remove.bg)
     let hasAlpha = false;
-    for (let i = 3; i < data.length; i += 60) {
-      if (data[i] < 180) {
+    for (let i = 3; i < data.length; i += 40) {
+      if (data[i] < 200) {
         hasAlpha = true;
         break;
       }
     }
-
     if (hasAlpha) {
       return tempCanvas;
     }
 
-    // Sample border pixels to detect dominant background color
-    const borderColors = [];
-    const sampleStep = Math.max(4, Math.floor(targetWidth / 40));
-    for (let x = 0; x < targetWidth; x += sampleStep) {
-      const topIdx = x * 4;
-      borderColors.push([data[topIdx], data[topIdx + 1], data[topIdx + 2]]);
-      const botIdx = ((targetHeight - 1) * targetWidth + x) * 4;
-      borderColors.push([data[botIdx], data[botIdx + 1], data[botIdx + 2]]);
+    // MULTI-CLUSTER PERIMETER SAMPLING:
+    // Sample outer border bands (outer 8% margins)
+    const marginX = Math.max(2, Math.floor(targetWidth * 0.08));
+    const marginY = Math.max(2, Math.floor(targetHeight * 0.08));
+    const step = Math.max(2, Math.floor(Math.min(targetWidth, targetHeight) / 50));
+
+    const borderSamples = [];
+    for (let y = 0; y < marginY; y += step) {
+      for (let x = 0; x < targetWidth; x += step) {
+        const idx = (y * targetWidth + x) * 4;
+        borderSamples.push([data[idx], data[idx + 1], data[idx + 2]]);
+        const bIdx = ((targetHeight - 1 - y) * targetWidth + x) * 4;
+        borderSamples.push([data[bIdx], data[bIdx + 1], data[bIdx + 2]]);
+      }
     }
-    for (let y = 0; y < targetHeight; y += sampleStep) {
-      const leftIdx = y * targetWidth * 4;
-      borderColors.push([data[leftIdx], data[leftIdx + 1], data[leftIdx + 2]]);
-      const rightIdx = (y * targetWidth + (targetWidth - 1)) * 4;
-      borderColors.push([data[rightIdx], data[rightIdx + 1], data[rightIdx + 2]]);
+    for (let x = 0; x < marginX; x += step) {
+      for (let y = marginY; y < targetHeight - marginY; y += step) {
+        const idx = (y * targetWidth + x) * 4;
+        borderSamples.push([data[idx], data[idx + 1], data[idx + 2]]);
+        const rIdx = (y * targetWidth + (targetWidth - 1 - x)) * 4;
+        borderSamples.push([data[rIdx], data[rIdx + 1], data[rIdx + 2]]);
+      }
     }
 
-    let sumR = 0, sumG = 0, sumB = 0;
-    for (const c of borderColors) {
-      sumR += c[0];
-      sumG += c[1];
-      sumB += c[2];
+    // Cluster border samples into dominant color centroids (up to 16 clusters)
+    const clusters = [];
+    const clusterRadiusSq = 32 * 32;
+    for (const [r, g, b] of borderSamples) {
+      let matched = false;
+      for (const c of clusters) {
+        const dSq = (r - c.r) ** 2 + (g - c.g) ** 2 + (b - c.b) ** 2;
+        if (dSq < clusterRadiusSq) {
+          c.count++;
+          c.r = (c.r * (c.count - 1) + r) / c.count;
+          c.g = (c.g * (c.count - 1) + g) / c.count;
+          c.b = (c.b * (c.count - 1) + b) / c.count;
+          matched = true;
+          break;
+        }
+      }
+      if (!matched && clusters.length < 16) {
+        clusters.push({ r, g, b, count: 1 });
+      }
     }
-    const avgR = sumR / borderColors.length;
-    const avgG = sumG / borderColors.length;
-    const avgB = sumB / borderColors.length;
 
-    // BFS Flood-fill from borders inward to clear matching background
-    const visited = new Uint8Array(targetWidth * targetHeight);
-    const queue = [];
+    // Sort clusters by occurrence frequency
+    clusters.sort((a, b) => b.count - a.count);
+
+    function isBgColor(r, g, b, threshold) {
+      const threshSq = threshold * threshold;
+      for (let i = 0; i < clusters.length; i++) {
+        const c = clusters[i];
+        const dSq = (r - c.r) ** 2 + (g - c.g) ** 2 + (b - c.b) ** 2;
+        if (dSq < threshSq) return true;
+      }
+      return false;
+    }
+
+    // CRAFT CENTER PROTECTION:
+    // Artisan craft products are placed near center. Protect the inner elliptical core.
+    const cx = targetWidth / 2;
+    const cy = targetHeight / 2;
+    const rx = targetWidth * 0.46;
+    const ry = targetHeight * 0.46;
+
+    // BFS Flood Fill inward from all 4 borders
+    const visited = new Uint8Array(totalPixels);
+    const queue = new Int32Array(totalPixels * 2);
+    let head = 0;
+    let tail = 0;
 
     for (let x = 0; x < targetWidth; x++) {
-      queue.push(x, 0);
-      queue.push(x, targetHeight - 1);
-      visited[x] = 1;
-      visited[(targetHeight - 1) * targetWidth + x] = 1;
+      const topIdx = x;
+      const botIdx = (targetHeight - 1) * targetWidth + x;
+      visited[topIdx] = 1;
+      visited[botIdx] = 1;
+      queue[tail++] = x; queue[tail++] = 0;
+      queue[tail++] = x; queue[tail++] = targetHeight - 1;
     }
     for (let y = 0; y < targetHeight; y++) {
-      queue.push(0, y);
-      queue.push(targetWidth - 1, y);
-      visited[y * targetWidth] = 1;
-      visited[y * targetWidth + targetWidth - 1] = 1;
+      const leftIdx = y * targetWidth;
+      const rightIdx = y * targetWidth + targetWidth - 1;
+      if (!visited[leftIdx]) {
+        visited[leftIdx] = 1;
+        queue[tail++] = 0; queue[tail++] = y;
+      }
+      if (!visited[rightIdx]) {
+        visited[rightIdx] = 1;
+        queue[tail++] = targetWidth - 1; queue[tail++] = y;
+      }
     }
 
-    const threshold = 62;
-    let head = 0;
-
-    while (head < queue.length) {
+    while (head < tail) {
       const qx = queue[head++];
       const qy = queue[head++];
       const pIdx = (qy * targetWidth + qx) * 4;
+
+      const normDist = Math.sqrt(((qx - cx) / rx) ** 2 + ((qy - cy) / ry) ** 2);
+
+      // Core protection: craft product center is preserved
+      if (normDist < 0.35) {
+        continue;
+      }
 
       const r = data[pIdx];
       const g = data[pIdx + 1];
       const b = data[pIdx + 2];
 
-      const dist = Math.sqrt((r - avgR) ** 2 + (g - avgG) ** 2 + (b - avgB) ** 2);
+      const adaptiveThresh = Math.round(35 + Math.min(1, Math.max(0, normDist - 0.35) / 0.65) * 35);
 
-      if (dist < threshold) {
-        data[pIdx + 3] = 0; // Transparent cutout
+      if (isBgColor(r, g, b, adaptiveThresh) || normDist > 1.05) {
+        data[pIdx + 3] = 0; // Cutout transparent
 
         if (qx + 1 < targetWidth && !visited[qy * targetWidth + qx + 1]) {
           visited[qy * targetWidth + qx + 1] = 1;
-          queue.push(qx + 1, qy);
+          queue[tail++] = qx + 1; queue[tail++] = qy;
         }
         if (qx - 1 >= 0 && !visited[qy * targetWidth + qx - 1]) {
           visited[qy * targetWidth + qx - 1] = 1;
-          queue.push(qx - 1, qy);
+          queue[tail++] = qx - 1; queue[tail++] = qy;
         }
         if (qy + 1 < targetHeight && !visited[(qy + 1) * targetWidth + qx]) {
           visited[(qy + 1) * targetWidth + qx] = 1;
-          queue.push(qx, qy + 1);
+          queue[tail++] = qx; queue[tail++] = qy + 1;
         }
         if (qy - 1 >= 0 && !visited[(qy - 1) * targetWidth + qx]) {
           visited[(qy - 1) * targetWidth + qx] = 1;
-          queue.push(qx, qy - 1);
+          queue[tail++] = qx; queue[tail++] = qy - 1;
+        }
+      }
+    }
+
+    // STUDIO VIGNETTE FEATHERING:
+    // Softly fade outer border perimeter into transparent so no sharp rectangular crop lines remain
+    for (let y = 0; y < targetHeight; y++) {
+      for (let x = 0; x < targetWidth; x++) {
+        const pIdx = (y * targetWidth + x) * 4;
+        if (data[pIdx + 3] === 0) continue;
+
+        const normDist = Math.sqrt(((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2);
+        if (normDist > 0.85) {
+          const fade = Math.max(0, Math.min(1, (1.02 - normDist) / 0.17));
+          data[pIdx + 3] = Math.round(data[pIdx + 3] * fade);
         }
       }
     }
@@ -202,10 +313,10 @@ export async function renderClientStudioCompositor(imageSrc, preset = 'Studio Cl
         ctx.save();
         const shadowGrad = ctx.createRadialGradient(
           size * 0.5,
-          y + h - 10,
+          y + h - 8,
           w * 0.08,
           size * 0.5,
-          y + h - 10,
+          y + h - 8,
           w * 0.48
         );
         shadowGrad.addColorStop(0, 'rgba(15, 23, 42, 0.24)');
@@ -213,7 +324,7 @@ export async function renderClientStudioCompositor(imageSrc, preset = 'Studio Cl
         shadowGrad.addColorStop(1, 'rgba(15, 23, 42, 0)');
         ctx.fillStyle = shadowGrad;
         ctx.beginPath();
-        ctx.ellipse(size * 0.5, y + h - 10, w * 0.46, Math.max(14, h * 0.045), 0, 0, Math.PI * 2);
+        ctx.ellipse(size * 0.5, y + h - 8, w * 0.46, Math.max(14, h * 0.045), 0, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
 
@@ -249,8 +360,8 @@ export async function renderClientStudioCompositor(imageSrc, preset = 'Studio Cl
 }
 
 /**
- * Enhance product photo using backend/Vercel POST /api/image/enhance API with
- * seamless instant fallback to Client Studio Compositor.
+ * Enhance product photo using In-Browser Neural AI, Serverless Remove.bg API,
+ * and Smart Multi-Cluster Studio Compositor.
  */
 export async function enhanceRawImage(imageInput, token = null, options = {}) {
   let imagePayload = imageInput;
@@ -266,7 +377,34 @@ export async function enhanceRawImage(imageInput, token = null, options = {}) {
     }
   }
 
-  // 1. Try Remove.bg AI Segmentation API (via Vercel Serverless Function / Backend)
+  // 1. Priority 1: Zero-cost In-Browser AI Segmentation (@imgly/background-removal)
+  try {
+    const localTransparentPng = await segmentWithLocalAI(imagePayload);
+    if (localTransparentPng) {
+      const studioComposite = await renderClientStudioCompositor(localTransparentPng, options.preset || 'Studio Clean White');
+      return {
+        success: true,
+        isConfigured: true,
+        originalImageUrl: imagePayload,
+        enhancedImageUrl: studioComposite,
+        enhancedBase64: studioComposite,
+        enhancedImage: studioComposite,
+        message: 'Background removed with AI Neural Network & Studio Lighting applied',
+        engine: 'imgly-local-neural-ai',
+        enhancementDetails: {
+          background: `Studio Backdrop (${options.preset || 'Studio Clean White'})`,
+          lighting: 'AI High-Key Studio Lighting',
+          contrastBoost: '+8%',
+          vibrancyBoost: '+12%',
+          backgroundRemoved: true,
+        },
+      };
+    }
+  } catch (localAiErr) {
+    console.warn('Local neural AI notice:', localAiErr.message);
+  }
+
+  // 2. Priority 2: Remove.bg AI Segmentation API (via Vercel Serverless Function / Backend)
   try {
     const headers = {};
     if (token) {
@@ -311,7 +449,7 @@ export async function enhanceRawImage(imageInput, token = null, options = {}) {
     console.warn('Remove.bg cloud endpoint notice, using Client Studio Segmentation:', err.message);
   }
 
-  // 2. Client-Side Studio Compositor with Foreground Segmentation Fallback
+  // 3. Priority 3: Client-Side Studio Compositor with Multi-Cluster Smart Perimeter Matting
   try {
     const studioEnhancedBase64 = await renderClientStudioCompositor(imagePayload, options.preset || 'Studio Clean White');
     return {
@@ -322,7 +460,7 @@ export async function enhanceRawImage(imageInput, token = null, options = {}) {
       enhancedBase64: studioEnhancedBase64,
       enhancedImage: studioEnhancedBase64,
       message: 'Enhanced with Karigar Studio Lighting & Clean Backdrop',
-      engine: 'karigar-canvas-studio-engine',
+      engine: 'karigar-smart-canvas-matting',
       enhancementDetails: {
         background: `Studio Backdrop (${options.preset || 'Studio Clean White'})`,
         lighting: 'High-Key Artisan Diffuse Lighting',
